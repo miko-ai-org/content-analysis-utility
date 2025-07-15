@@ -1,3 +1,4 @@
 node_modules
 unzipped
 playground.ts
+.env

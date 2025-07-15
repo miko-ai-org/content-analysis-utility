@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import pdf from 'pdf-parse';
+import axios from 'axios';
 
 export async function unzip(zipFile: string) {
     const zip = await unzipper.Open.file(zipFile);
@@ -45,4 +46,20 @@ export async function getPdfLineCount(filePath: string) {
     const text = data.text;
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
     return lines.length;
+}
+
+export async function getYoutubeVideoDurationInSeconds(videoUrl: string) {
+    const videoId = new URL(videoUrl).searchParams.get('v');
+    const apiUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${process.env.GOOGLE_API_KEY}&part=contentDetails`;
+
+    const res = await axios.get(apiUrl);
+    const duration = res.data.items[0].contentDetails.duration;
+
+    // ISO 8601 duration -> seconds
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    const hours = parseInt(match[1] || '0');
+    const minutes = parseInt(match[2] || '0');
+    const seconds = parseInt(match[3] || '0');
+
+    return hours * 3600 + minutes * 60 + seconds;
 }
