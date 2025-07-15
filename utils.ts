@@ -2,6 +2,7 @@ import * as unzipper from 'unzipper';
 import * as fs from 'fs';
 import * as path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
+import pdf from 'pdf-parse';
 
 export async function unzip(zipFile: string) {
     const zip = await unzipper.Open.file(zipFile);
@@ -36,4 +37,12 @@ export function getDurationInSecondsOfMp3File(filePath: string) {
             resolve(metadata.format.duration);
         });
     });
+}
+
+export async function getPdfLineCount(filePath: string) {
+    const dataBuffer = fs.readFileSync(filePath);
+    const data = await pdf(dataBuffer);
+    const text = data.text;
+    const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+    return lines.length;
 }
