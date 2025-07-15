@@ -1,6 +1,7 @@
 import * as unzipper from 'unzipper';
 import * as fs from 'fs';
 import * as path from 'path';
+import ffmpeg from 'fluent-ffmpeg';
 
 export async function unzip(zipFile: string) {
     const zip = await unzipper.Open.file(zipFile);
@@ -26,4 +27,13 @@ export async function unzip(zipFile: string) {
         const content = await file.buffer();
         fs.writeFileSync(filePath, content);
     }
+}
+
+export function getDurationInSecondsOfMp3File(filePath: string) {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(filePath, (err: any, metadata: any) => {
+            if (err) return reject(err);
+            resolve(metadata.format.duration);
+        });
+    });
 }
