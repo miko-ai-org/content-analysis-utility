@@ -30,7 +30,7 @@ export async function unzip(zipFile: string) {
     }
 }
 
-export function getDurationInSecondsOfMp3File(filePath: string) {
+export function getDurationInSecondsOfMp3File(filePath: string): Promise<number> {
     return new Promise((resolve, reject) => {
         ffmpeg.ffprobe(filePath, (err: any, metadata: any) => {
             if (err) return reject(err);
