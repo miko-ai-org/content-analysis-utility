@@ -1,4 +1,5 @@
 node_modules
-unzipped
+unzipped*
 playground.ts
 .env
+partners.zip

@@ -44,6 +44,9 @@ async function processDirectory(dirPath: string) {
             } else if (fileType === 'pdf') {
                 const lines = await getPdfLineCount(itemPath);
                 totalLines += lines;
+            } else if (fileType === 'zip') {
+                let dir = await unzip(dirPath, itemPath);
+                await processDirectory(dir);
             } else {
                 console.warn(`Unknown file type: ${fileType}`);
             }
@@ -52,9 +55,9 @@ async function processDirectory(dirPath: string) {
 }
 
 async function main() {
-    await unzip(zipFile);
+    let dir = await unzip("", zipFile);
 
-    await processDirectory('./unzipped');
+    await processDirectory(dir);
 
     console.log(`Total watch time: ${formatDuration(totalWatchSeconds)}`);
     console.log(`Total lines: ${totalLines}`);

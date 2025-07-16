@@ -5,10 +5,14 @@ import ffmpeg from 'fluent-ffmpeg';
 import pdf from 'pdf-parse';
 import axios from 'axios';
 
-export async function unzip(zipFile: string) {
+export async function unzip(pathPrefix: string, zipFile: string): Promise<string> {
+    if (pathPrefix !== "" && !pathPrefix.endsWith('/')) {
+        pathPrefix = pathPrefix + '/';
+    }
+
     const zip = await unzipper.Open.file(zipFile);
     const files = zip.files;
-    const unzippedDir = 'unzipped';
+    const unzippedDir = pathPrefix + 'unzipped-' + (zipFile.split('/').pop()?.replace('.zip', ''));
 
     // Create unzipped directory if it doesn't exist
     if (!fs.existsSync(unzippedDir)) {
@@ -17,6 +21,11 @@ export async function unzip(zipFile: string) {
 
     // Extract all files
     for (const file of files) {
+        // Skip directory entries (they typically end with '/')
+        if (file.path.endsWith('/')) {
+            continue;
+        }
+
         const filePath = path.join(unzippedDir, file.path);
         const fileDir = path.dirname(filePath);
 
@@ -29,6 +38,8 @@ export async function unzip(zipFile: string) {
         const content = await file.buffer();
         fs.writeFileSync(filePath, content);
     }
+
+    return unzippedDir;
 }
 
 export function getDurationInSecondsOfMp3File(filePath: string): Promise<number> {
