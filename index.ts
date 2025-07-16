@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ debug: false });
-import { getDurationInSecondsOfMp3File, getPdfLineCount, unzip } from './utils';
+import { getAllLinksFromXlsxFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds } from './utils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -47,10 +47,24 @@ async function processDirectory(dirPath: string) {
             } else if (fileType === 'zip') {
                 let dir = await unzip(dirPath, itemPath);
                 await processDirectory(dir);
+            } else if (fileType === "xlsx") {
+                let links = await getAllLinksFromXlsxFile(itemPath);
+                for (const link of links) {
+                    await processLink(link);
+                }
             } else {
                 console.warn(`Unknown file type: ${fileType}`);
             }
         }
+    }
+}
+
+async function processLink(link: string) {
+    if (link.includes("youtube.com") || link.includes("youtu.be")) {
+        let duration = await getYoutubeVideoDurationInSeconds(link);
+        totalWatchSeconds += duration;
+    } else {
+        console.warn(`Unknown link type: ${link}`);
     }
 }
 
