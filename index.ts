@@ -1,11 +1,11 @@
 import dotenv from 'dotenv';
 dotenv.config({ debug: false });
-import { getAllLinksFromXlsxFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds } from './utils';
+import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds } from './utils';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const args = process.argv.slice(2);
-const zipFile = args[0];
+const inputFile = args[0];
 
 let totalWatchSeconds = 0;
 let totalLines = 0;
@@ -25,37 +25,46 @@ function formatDuration(seconds: number): string {
     }
 }
 
+async function processFile(dirPath: string, item: string) {
+    const itemPath = path.join(dirPath, item);
+    const stats = fs.statSync(itemPath);
+
+    if (stats.isDirectory()) {
+        // Recursively process subdirectory
+        await processDirectory(itemPath);
+    } else if (stats.isFile()) {
+        // Process file
+        const fileType = item.split('.').pop();
+        if (fileType === 'mp3') {
+            const duration = await getDurationInSecondsOfMp3File(itemPath);
+            totalWatchSeconds += duration;
+        } else if (fileType === 'pdf') {
+            const lines = await getPdfLineCount(itemPath);
+            totalLines += lines;
+
+            // Also extract and process links from PDF
+            const links = await getAllLinksFromPdfFile(itemPath);
+            for (const link of links) {
+                await processLink(link);
+            }
+        } else if (fileType === 'zip') {
+            let dir = await unzip(dirPath, itemPath);
+            await processDirectory(dir);
+        } else if (fileType === "xlsx") {
+            let links = await getAllLinksFromXlsxFile(itemPath);
+            for (const link of links) {
+                await processLink(link);
+            }
+        } else {
+            console.warn(`Unknown file type: ${fileType}`);
+        }
+    }
+}
+
 async function processDirectory(dirPath: string) {
     const items = fs.readdirSync(dirPath);
-
     for (const item of items) {
-        const itemPath = path.join(dirPath, item);
-        const stats = fs.statSync(itemPath);
-
-        if (stats.isDirectory()) {
-            // Recursively process subdirectory
-            await processDirectory(itemPath);
-        } else if (stats.isFile()) {
-            // Process file
-            const fileType = item.split('.').pop();
-            if (fileType === 'mp3') {
-                const duration = await getDurationInSecondsOfMp3File(itemPath);
-                totalWatchSeconds += duration;
-            } else if (fileType === 'pdf') {
-                const lines = await getPdfLineCount(itemPath);
-                totalLines += lines;
-            } else if (fileType === 'zip') {
-                let dir = await unzip(dirPath, itemPath);
-                await processDirectory(dir);
-            } else if (fileType === "xlsx") {
-                let links = await getAllLinksFromXlsxFile(itemPath);
-                for (const link of links) {
-                    await processLink(link);
-                }
-            } else {
-                console.warn(`Unknown file type: ${fileType}`);
-            }
-        }
+        await processFile(dirPath, item);
     }
 }
 
@@ -69,9 +78,7 @@ async function processLink(link: string) {
 }
 
 async function main() {
-    let dir = await unzip("", zipFile);
-
-    await processDirectory(dir);
+    await processFile("./", inputFile);
 
     console.log(`Total watch time: ${formatDuration(totalWatchSeconds)}`);
     console.log(`Total lines: ${totalLines}`);

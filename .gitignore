@@ -3,3 +3,4 @@ unzipped*
 playground.ts
 .env
 partners.zip
+.DS_Store

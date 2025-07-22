@@ -5,6 +5,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import pdf from 'pdf-parse';
 import axios from 'axios';
 import * as xlsx from 'xlsx';
+import { PDFDocument, PDFDict, PDFName, PDFArray, PDFString } from 'pdf-lib';
 
 export async function unzip(pathPrefix: string, zipFile: string): Promise<string> {
     if (pathPrefix !== "" && !pathPrefix.endsWith('/')) {
@@ -60,7 +61,64 @@ export async function getPdfLineCount(filePath: string) {
     return lines.length;
 }
 
+export async function getAllLinksFromPdfFile(filePath: string): Promise<string[]> {
+    const dataBuffer = fs.readFileSync(filePath);
+    const links = new Set<string>();
+
+    // --- Extract from plain text ---
+    const data = await pdf(dataBuffer);
+    const text = data.text;
+
+    const urlRegex = /https?:\/\/[^\s<>"{}|\\^[\]`]+/gi;
+    const textMatches = text.match(urlRegex);
+    if (textMatches) {
+        textMatches.forEach(link => links.add(link.trim()));
+    }
+
+    // --- Extract from annotations ---
+    const pdfDoc = await PDFDocument.load(dataBuffer);
+    const pages = pdfDoc.getPages();
+
+    for (const page of pages) {
+        const annotsRef = page.node.get(PDFName.of('Annots'));
+        if (!annotsRef) continue;
+
+        const annotsObj = pdfDoc.context.lookup(annotsRef);
+        if (!(annotsObj instanceof PDFArray)) continue;
+
+        const annotsArray = annotsObj as PDFArray;
+        for (const annotRef of annotsArray.asArray()) {
+            const annot = pdfDoc.context.lookup(annotRef);
+            if (!(annot instanceof PDFDict)) continue;
+
+            const subtype = annot.get(PDFName.of('Subtype'));
+            if (subtype?.toString() !== '/Link') continue;
+
+            const actionRef = annot.get(PDFName.of('A'));
+            if (!actionRef) continue;
+
+            const action = pdfDoc.context.lookup(actionRef);
+            if (!(action instanceof PDFDict)) continue;
+
+            const actionType = action.get(PDFName.of('S'));
+            const uri = action.get(PDFName.of('URI'));
+
+            if (actionType?.toString() === '/URI' && uri instanceof PDFString) {
+                links.add(uri.decodeText());
+            }
+        }
+    }
+
+    return Array.from(links);
+}
+
+
 export async function getYoutubeVideoDurationInSeconds(videoUrl: string) {
+    if (videoUrl.includes("@")) {
+        // this refers to a user channel.. so we ignore it.
+        return 0;
+    }
+
     let videoId: string | null = null;
 
     try {
