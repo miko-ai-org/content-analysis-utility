@@ -5,6 +5,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import pdf from 'pdf-parse';
 import axios from 'axios';
 import * as xlsx from 'xlsx';
+import mime from 'mime-types';
 import { PDFDocument, PDFDict, PDFName, PDFArray, PDFString } from 'pdf-lib';
 
 export async function unzip(pathPrefix: string, zipFile: string): Promise<string> {
@@ -49,6 +50,28 @@ export function getDurationInSecondsOfMp3File(filePath: string): Promise<number>
         ffmpeg.ffprobe(filePath, (err: any, metadata: any) => {
             if (err) return reject(err);
             resolve(metadata.format.duration);
+        });
+    });
+}
+
+export function getDurationInSecondsOfMp4File(filePath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(filePath, (err: Error | null, metadata: any) => {
+            if (err) {
+                return reject(new Error(`Failed to probe video file: ${err.message}`));
+            }
+
+            if (!metadata || !metadata.format) {
+                return reject(new Error('Invalid metadata: missing format information'));
+            }
+
+            const duration = metadata.format.duration;
+
+            if (typeof duration !== 'number' || isNaN(duration) || duration < 0) {
+                return reject(new Error('Invalid duration: duration is not a valid positive number'));
+            }
+
+            resolve(duration);
         });
     });
 }
@@ -229,4 +252,49 @@ async function getAllCellContentFromXlsxFile(filePath: string) {
     }
 
     return allSheetsData;
+}
+
+export async function downloadFileFromGdrive(url: string): Promise<string> {
+    const fileId = extractDriveFileId(url);
+    if (!fileId) {
+        throw new Error('Could not extract file ID from URL');
+    }
+
+    const filePath = await downloadPublicDriveFileWithExtension(fileId);
+    return filePath;
+}
+
+async function getDriveFileMetadata(fileId: string) {
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType&key=${process.env.GOOGLE_API_KEY}`;
+    const res = await axios.get(url);
+    return res.data;
+}
+
+export async function downloadPublicDriveFileWithExtension(fileId: string): Promise<string> {
+    const metadata = await getDriveFileMetadata(fileId);
+    const extension = mime.extension(metadata.mimeType) || 'bin';
+    const safeName = `file-${fileId}.${extension}`;
+    const filename = safeName.includes('.') ? safeName : `${safeName}.${extension}`;
+    const destPath = path.join("./temp", filename);
+
+    const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${process.env.GOOGLE_API_KEY}`;
+
+    const response = await axios.get(downloadUrl, {
+        responseType: 'stream',
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+
+    const writer = fs.createWriteStream(destPath);
+    await new Promise((resolve, reject) => {
+        response.data.pipe(writer);
+        writer.on('finish', () => resolve(destPath));
+        writer.on('error', reject);
+    });
+
+    return destPath;
+}
+
+function extractDriveFileId(link: string): string | null {
+    const match = link.match(/\/d\/([a-zA-Z0-9_-]+)/) || link.match(/id=([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : null;
 }

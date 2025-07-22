@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ debug: false });
-import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds } from './utils';
+import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds, downloadFileFromGdrive, getDurationInSecondsOfMp4File } from './utils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -9,6 +9,8 @@ const inputFile = args[0];
 
 let totalWatchSeconds = 0;
 let totalLines = 0;
+
+let seenLinks = new Set<string>();
 
 function formatDuration(seconds: number): string {
     if (seconds < 60) {
@@ -44,17 +46,24 @@ async function processFile(dirPath: string, item: string) {
 
             // Also extract and process links from PDF
             const links = await getAllLinksFromPdfFile(itemPath);
+            let promises = [];
             for (const link of links) {
-                await processLink(link);
+                promises.push(processLink(link));
             }
+            await Promise.all(promises);
         } else if (fileType === 'zip') {
             let dir = await unzip(dirPath, itemPath);
             await processDirectory(dir);
         } else if (fileType === "xlsx") {
             let links = await getAllLinksFromXlsxFile(itemPath);
+            let promises = [];
             for (const link of links) {
-                await processLink(link);
+                promises.push(processLink(link));
             }
+            await Promise.all(promises);
+        } else if (fileType === "mp4") {
+            let duration = await getDurationInSecondsOfMp4File(itemPath);
+            totalWatchSeconds += duration;
         } else {
             console.warn(`Unknown file type: ${fileType}`);
         }
@@ -63,21 +72,38 @@ async function processFile(dirPath: string, item: string) {
 
 async function processDirectory(dirPath: string) {
     const items = fs.readdirSync(dirPath);
+    let promises = [];
     for (const item of items) {
-        await processFile(dirPath, item);
+        promises.push(processFile(dirPath, item));
     }
+    await Promise.all(promises);
 }
 
 async function processLink(link: string) {
+    if (seenLinks.has(link)) {
+        return;
+    }
+    seenLinks.add(link);
     if (link.includes("youtube.com") || link.includes("youtu.be")) {
         let duration = await getYoutubeVideoDurationInSeconds(link);
         totalWatchSeconds += duration;
+    } else if (link.includes("drive.google.com")) {
+        try {
+            let filePath = await downloadFileFromGdrive(link);
+            await processFile(path.dirname(filePath), path.basename(filePath));
+        } catch (error) {
+            console.warn(`Failed to download file from Drive: ${link}`);
+        }
+
     } else {
         console.warn(`Unknown link type: ${link}`);
     }
 }
 
 async function main() {
+    if (!fs.existsSync("./temp")) {
+        fs.mkdirSync("./temp");
+    }
     await processFile("./", inputFile);
 
     console.log(`Total watch time: ${formatDuration(totalWatchSeconds)}`);
