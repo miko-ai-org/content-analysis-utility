@@ -5,7 +5,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import pdf from 'pdf-parse';
 import axios from 'axios';
 import * as xlsx from 'xlsx';
-import mime from 'mime-types';
+import { downloadDriveFileWithOAuth } from './driveDownloader';
 import { PDFDocument, PDFDict, PDFName, PDFArray, PDFString } from 'pdf-lib';
 
 export async function unzip(pathPrefix: string, zipFile: string): Promise<string> {
@@ -99,7 +99,7 @@ export async function getAllLinksFromPdfFile(filePath: string): Promise<string[]
     }
 
     // --- Extract from annotations ---
-    const pdfDoc = await PDFDocument.load(dataBuffer);
+    const pdfDoc = await PDFDocument.load(dataBuffer, { ignoreEncryption: true });
     const pages = pdfDoc.getPages();
 
     for (const page of pages) {
@@ -260,38 +260,8 @@ export async function downloadFileFromGdrive(url: string): Promise<string> {
         throw new Error('Could not extract file ID from URL');
     }
 
-    const filePath = await downloadPublicDriveFileWithExtension(fileId);
+    const filePath = await downloadDriveFileWithOAuth(fileId);
     return filePath;
-}
-
-async function getDriveFileMetadata(fileId: string) {
-    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType&key=${process.env.GOOGLE_API_KEY}`;
-    const res = await axios.get(url);
-    return res.data;
-}
-
-export async function downloadPublicDriveFileWithExtension(fileId: string): Promise<string> {
-    const metadata = await getDriveFileMetadata(fileId);
-    const extension = mime.extension(metadata.mimeType) || 'bin';
-    const safeName = `file-${fileId}.${extension}`;
-    const filename = safeName.includes('.') ? safeName : `${safeName}.${extension}`;
-    const destPath = path.join("./temp", filename);
-
-    const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${process.env.GOOGLE_API_KEY}`;
-
-    const response = await axios.get(downloadUrl, {
-        responseType: 'stream',
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-
-    const writer = fs.createWriteStream(destPath);
-    await new Promise((resolve, reject) => {
-        response.data.pipe(writer);
-        writer.on('finish', () => resolve(destPath));
-        writer.on('error', reject);
-    });
-
-    return destPath;
 }
 
 function extractDriveFileId(link: string): string | null {

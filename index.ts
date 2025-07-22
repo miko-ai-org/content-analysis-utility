@@ -92,7 +92,7 @@ async function processLink(link: string) {
             let filePath = await downloadFileFromGdrive(link);
             await processFile(path.dirname(filePath), path.basename(filePath));
         } catch (error) {
-            console.warn(`Failed to download file from Drive: ${link}`);
+            console.error(`Failed to download file from Drive: ${link}. Error: ${(error as any).message}`);
         }
 
     } else {

@@ -5,3 +5,5 @@ playground.ts
 partners.zip
 .DS_Store
 temp/*
+credentials.json
+token.json
