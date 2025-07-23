@@ -6,6 +6,7 @@ import pdf from 'pdf-parse';
 import axios from 'axios';
 import * as xlsx from 'xlsx';
 import { downloadDriveFileWithOAuth } from './driveDownloader';
+import puppeteer, { Browser } from 'puppeteer';
 import { PDFDocument, PDFDict, PDFName, PDFArray, PDFString } from 'pdf-lib';
 
 export async function unzip(pathPrefix: string, zipFile: string): Promise<string> {
@@ -267,4 +268,84 @@ export async function downloadFileFromGdrive(url: string): Promise<string> {
 function extractDriveFileId(link: string): string | null {
     const match = link.match(/\/d\/([a-zA-Z0-9_-]+)/) || link.match(/id=([a-zA-Z0-9_-]+)/);
     return match ? match[1] : null;
+}
+
+let browser: Browser | null = null;
+
+let vimeoRequestQueue: string[] = [];
+
+export async function getVimeoVideoDurationFromReviewLink(url: string): Promise<number> {
+    vimeoRequestQueue.push(url);
+    while (vimeoRequestQueue[0] !== url) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    try {
+        return await processVimeoRequestQueue(url);
+    } finally {
+        vimeoRequestQueue.shift();
+    }
+}
+
+async function processVimeoRequestQueue(url: string) {
+    if (!browser) {
+        browser = await puppeteer.launch({ headless: false });
+    }
+
+    const page = await browser.newPage();
+
+    try {
+        await page.goto(url, { waitUntil: 'networkidle2' });
+
+        // we check if it's cloudflare captcha page, and if it is, we wait for the user to solve it
+        while (true) {
+            let isCaptcha = await page.evaluate(() => {
+                const targetText = "To continue, please confirm that you're a human (and not a spambot).";
+
+                for (const el of Array.from(document.querySelectorAll('*'))) {
+                    if (el.textContent && el.textContent.includes(targetText)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+
+            if (!isCaptcha) {
+                break;
+            }
+            console.log("Captcha detected, please solve it on the browser!");
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        // Wait for video metadata to load
+        await page.waitForSelector('video', { timeout: 6000 });
+
+        const duration = await page.evaluate(() => {
+            return new Promise<string | null>((resolve) => {
+                let div = document.querySelector('.Timecode_module_timecode__66300889');
+                if (!div) {
+                    return resolve(null);
+                }
+                let text = div.textContent;
+                return resolve(text);
+            });
+        });
+
+        if (!duration) {
+            throw new Error(`No duration found for ${url}`);
+        }
+
+        let splitted = duration.split(':').map(Number);
+        if (splitted.length === 2) {
+            return splitted[0] * 60 + splitted[1];
+        } else if (splitted.length === 3) {
+            return splitted[0] * 3600 + splitted[1] * 60 + splitted[2];
+        } else {
+            throw new Error(`Invalid duration format: ${duration}`);
+        }
+    } catch (err) {
+        throw new Error(`Failed to get duration for ${url}: ${err}`);
+    } finally {
+        await page.close();
+    }
 }

@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ debug: false });
-import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds, downloadFileFromGdrive, getDurationInSecondsOfMp4File } from './utils';
+import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds, downloadFileFromGdrive, getDurationInSecondsOfMp4File, getVimeoVideoDurationFromReviewLink } from './utils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -94,7 +94,13 @@ async function processLink(link: string) {
         } catch (error) {
             console.error(`Failed to download file from Drive: ${link}. Error: ${(error as any).message}`);
         }
-
+    } else if (link.includes("vimeo.com")) {
+        try {
+            let duration = await getVimeoVideoDurationFromReviewLink(link);
+            totalWatchSeconds += duration;
+        } catch (error) {
+            console.error(`Failed to get Vimeo video duration: ${link}. Error: ${(error as any).message}`);
+        }
     } else {
         console.warn(`Unknown link type: ${link}`);
     }
