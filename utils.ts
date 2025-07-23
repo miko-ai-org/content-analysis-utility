@@ -6,8 +6,10 @@ import pdf from 'pdf-parse';
 import axios from 'axios';
 import * as xlsx from 'xlsx';
 import { downloadDriveFileWithOAuth } from './driveDownloader';
-import puppeteer, { Browser } from 'puppeteer';
+import { Browser } from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
 import { PDFDocument, PDFDict, PDFName, PDFArray, PDFString } from 'pdf-lib';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 export async function unzip(pathPrefix: string, zipFile: string): Promise<string> {
     if (pathPrefix !== "" && !pathPrefix.endsWith('/')) {
@@ -274,7 +276,30 @@ let browser: Browser | null = null;
 
 let vimeoRequestQueue: string[] = [];
 
-export async function getVimeoVideoDurationFromReviewLink(url: string): Promise<number> {
+export async function getVimeoVideoDurationFromLink(url: string): Promise<number> {
+    if (url.includes("/review/")) {
+        return await getVimeoVideoDurationUsingBrowser(url);
+    } else if (url.includes("folder")) {
+        throw new Error("Folder links are not supported yet");
+    } else {
+        try {
+            return await getVimeoVideoDurationOfLinkUsingAPI(url);
+        } catch (error) {
+            return await getVimeoVideoDurationUsingBrowser(url);
+        }
+    }
+}
+
+async function getVimeoVideoDurationOfLinkUsingAPI(url: string): Promise<number> {
+    const oembedUrl = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`;
+    const oembedRes = await axios.get(oembedUrl, { timeout: 5000 });
+    if (typeof oembedRes.data.duration === 'number') {
+        return oembedRes.data.duration;
+    }
+    throw new Error(`Failed to get Vimeo video duration: ${url}. Error: ${(oembedRes.data as any).message}`);
+}
+
+async function getVimeoVideoDurationUsingBrowser(url: string) {
     vimeoRequestQueue.push(url);
     while (vimeoRequestQueue[0] !== url) {
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -288,37 +313,56 @@ export async function getVimeoVideoDurationFromReviewLink(url: string): Promise<
 
 async function processVimeoRequestQueue(url: string) {
     if (!browser) {
-        browser = await puppeteer.launch({ headless: false });
+        puppeteer.use(StealthPlugin());
+        browser = await puppeteer.launch({
+            headless: false,
+            args: ['--start-maximized'],
+            defaultViewport: null,
+        });
     }
 
     const page = await browser.newPage();
+    await page.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+    );
 
     try {
         await page.goto(url, { waitUntil: 'networkidle2' });
 
-        // we check if it's cloudflare captcha page, and if it is, we wait for the user to solve it
-        while (true) {
-            let isCaptcha = await page.evaluate(() => {
-                const targetText = "To continue, please confirm that you're a human (and not a spambot).";
+        let isCaptcha = await page.evaluate(() => {
+            const targetText = "To continue, please confirm that you're a human (and not a spambot).";
 
-                for (const el of Array.from(document.querySelectorAll('*'))) {
-                    if (el.textContent && el.textContent.includes(targetText)) {
-                        return true;
-                    }
+            for (const el of Array.from(document.querySelectorAll('*'))) {
+                if (el.textContent && el.textContent.includes(targetText)) {
+                    return true;
                 }
-
-                return false;
-            });
-
-            if (!isCaptcha) {
-                break;
             }
-            console.log("Captcha detected, please solve it on the browser!");
-            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            return false;
+        });
+
+        if (isCaptcha) {
+            throw new Error(`Captcha detected for ${url}`);
+        }
+
+        let isPasswordProtected = await page.evaluate(() => {
+            const targetText = "This video is password protected";
+
+            for (const el of Array.from(document.querySelectorAll('*'))) {
+                if (el.textContent && el.textContent.includes(targetText)) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+
+        if (isPasswordProtected) {
+            throw new Error(`Password protected video detected for ${url}`);
         }
 
         // Wait for video metadata to load
-        await page.waitForSelector('video', { timeout: 6000 });
+        await page.waitForSelector('video', { timeout: 7000 });
 
         const duration = await page.evaluate(() => {
             return new Promise<string | null>((resolve) => {

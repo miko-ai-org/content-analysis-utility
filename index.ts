@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ debug: false });
-import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds, downloadFileFromGdrive, getDurationInSecondsOfMp4File, getVimeoVideoDurationFromReviewLink } from './utils';
+import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds, downloadFileFromGdrive, getDurationInSecondsOfMp4File, getVimeoVideoDurationFromLink } from './utils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -96,7 +96,7 @@ async function processLink(link: string) {
         }
     } else if (link.includes("vimeo.com")) {
         try {
-            let duration = await getVimeoVideoDurationFromReviewLink(link);
+            let duration = await getVimeoVideoDurationFromLink(link);
             totalWatchSeconds += duration;
         } catch (error) {
             console.error(`Failed to get Vimeo video duration: ${link}. Error: ${(error as any).message}`);
@@ -111,7 +111,6 @@ async function main() {
         fs.mkdirSync("./temp");
     }
     await processFile("./", inputFile);
-
     console.log(`Total watch time: ${formatDuration(totalWatchSeconds)}`);
     console.log(`Total lines: ${totalLines}`);
 }
