@@ -1,16 +1,24 @@
 import dotenv from 'dotenv';
 dotenv.config({ debug: false });
-import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds, downloadFileFromGdrive, getDurationInSecondsOfMp4File, getVimeoVideoDurationFromLink } from './utils';
+import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds, downloadFileFromGdrive, getDurationInSecondsOfMp4File, getPdfLanguage, getYoutubeVideoTitle, detectLanguageFromTitle } from './utils';
+import { getLanguageDisplayName } from './detectLanguage';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const args = process.argv.slice(2);
 const inputFile = args[0];
 
-let totalWatchSeconds = 0;
-let totalLines = 0;
-
 let seenLinks = new Set<string>();
+
+let languageStats: Record<string, { watchSeconds: number; lines: number }> = {};
+
+function updateLanguageStats(language: string, watchSeconds: number = 0, lines: number = 0) {
+    if (!languageStats[language]) {
+        languageStats[language] = { watchSeconds: 0, lines: 0 };
+    }
+    languageStats[language].watchSeconds += watchSeconds;
+    languageStats[language].lines += lines;
+}
 
 function formatDuration(seconds: number): string {
     if (seconds < 60) {
@@ -39,10 +47,11 @@ async function processFile(dirPath: string, item: string) {
         const fileType = item.split('.').pop();
         if (fileType === 'mp3') {
             const duration = await getDurationInSecondsOfMp3File(itemPath);
-            totalWatchSeconds += duration;
+            updateLanguageStats('en', duration, 0);
         } else if (fileType === 'pdf') {
             const lines = await getPdfLineCount(itemPath);
-            totalLines += lines;
+            const language = await getPdfLanguage(itemPath);
+            updateLanguageStats(language, 0, lines);
 
             // Also extract and process links from PDF
             const links = await getAllLinksFromPdfFile(itemPath);
@@ -63,7 +72,7 @@ async function processFile(dirPath: string, item: string) {
             await Promise.all(promises);
         } else if (fileType === "mp4") {
             let duration = await getDurationInSecondsOfMp4File(itemPath);
-            totalWatchSeconds += duration;
+            updateLanguageStats('en', duration, 0);
         } else {
             console.warn(`Unknown file type: ${fileType}`);
         }
@@ -86,7 +95,10 @@ async function processLink(link: string) {
     seenLinks.add(link);
     if (link.includes("youtube.com") || link.includes("youtu.be")) {
         let duration = await getYoutubeVideoDurationInSeconds(link);
-        totalWatchSeconds += duration;
+        let title = await getYoutubeVideoTitle(link);
+        let language = await detectLanguageFromTitle(title);
+
+        updateLanguageStats(language, duration, 0);
     } else if (link.includes("drive.google.com")) {
         try {
             let filePath = await downloadFileFromGdrive(link);
@@ -94,13 +106,13 @@ async function processLink(link: string) {
         } catch (error) {
             console.error(`Failed to download file from Drive: ${link}. Error: ${(error as any).message}`);
         }
-    } else if (link.includes("vimeo.com")) {
-        try {
-            let duration = await getVimeoVideoDurationFromLink(link);
-            totalWatchSeconds += duration;
-        } catch (error) {
-            console.error(`Failed to get Vimeo video duration: ${link}. Error: ${(error as any).message}`);
-        }
+        // } else if (link.includes("vimeo.com")) {
+        //     try {
+        //         let duration = await getVimeoVideoDurationFromLink(link);
+        //         updateLanguageStats('en', duration, 0);
+        //     } catch (error) {
+        //         console.error(`Failed to get Vimeo video duration: ${link}. Error: ${(error as any).message}`);
+        //     }
     } else {
         console.warn(`Unknown link type: ${link}`);
     }
@@ -111,8 +123,14 @@ async function main() {
         fs.mkdirSync("./temp");
     }
     await processFile("./", inputFile);
-    console.log(`Total watch time: ${formatDuration(totalWatchSeconds)}`);
-    console.log(`Total lines: ${totalLines}`);
+    console.log("\n------------------------\n");
+    console.log('--- Language Breakdown ---');
+    const sortedLanguages = Object.keys(languageStats).sort();
+    for (const language of sortedLanguages) {
+        const stats = languageStats[language];
+        const languageDisplayName = getLanguageDisplayName(language);
+        console.log(`${languageDisplayName} - Watch time: ${formatDuration(stats.watchSeconds)}, Lines: ${stats.lines}`);
+    }
 }
 
 main();

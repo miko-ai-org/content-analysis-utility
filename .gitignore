@@ -7,3 +7,4 @@ partners.zip
 temp/*
 credentials.json
 token.json
+dist/*

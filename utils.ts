@@ -10,6 +10,8 @@ import { Browser } from 'puppeteer';
 import puppeteer from 'puppeteer-extra';
 import { PDFDocument, PDFDict, PDFName, PDFArray, PDFString } from 'pdf-lib';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import ISO6391 from 'iso-639-1';
+import { detectLanguage } from './detectLanguage';
 
 export async function unzip(pathPrefix: string, zipFile: string): Promise<string> {
     if (pathPrefix !== "" && !pathPrefix.endsWith('/')) {
@@ -85,6 +87,19 @@ export async function getPdfLineCount(filePath: string) {
     const text = data.text;
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
     return lines.length;
+}
+
+export async function getPdfLanguage(filePath: string): Promise<string> {
+    const dataBuffer = fs.readFileSync(filePath);
+    const data = await pdf(dataBuffer);
+    const text = data.text.trim();
+
+    if (!text || text.length < 50) {
+        return 'other';
+    }
+
+    const detectedLang = await detectLanguage(text);
+    return detectedLang.language;
 }
 
 export async function getAllLinksFromPdfFile(filePath: string): Promise<string[]> {
@@ -177,6 +192,44 @@ export async function getYoutubeVideoDurationInSeconds(videoUrl: string) {
     const seconds = parseInt(match[3] || '0');
 
     return hours * 3600 + minutes * 60 + seconds;
+}
+
+export async function getYoutubeVideoTitle(videoUrl: string): Promise<string> {
+    if (videoUrl.includes("@")) {
+        return "";
+    }
+
+    let videoId: string | null = null;
+
+    try {
+        const url = new URL(videoUrl);
+
+        if (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com') {
+            videoId = url.searchParams.get('v');
+        } else if (url.hostname === 'youtu.be') {
+            videoId = url.pathname.slice(1);
+        }
+
+        if (!videoId) {
+            throw new Error('Could not extract video ID from URL');
+        }
+    } catch (error) {
+        throw new Error('Invalid YouTube URL format');
+    }
+
+    const apiUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${process.env.GOOGLE_API_KEY}&part=snippet`;
+
+    const res = await axios.get(apiUrl);
+    return res.data.items[0]?.snippet?.title || "";
+}
+
+export async function detectLanguageFromTitle(title: string): Promise<string> {
+    if (!title) {
+        return 'other';
+    }
+
+    const detectedLang = await detectLanguage(title);
+    return detectedLang.language;
 }
 
 export async function getAllLinksFromXlsxFile(filePath: string) {
