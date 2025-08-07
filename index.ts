@@ -10,19 +10,20 @@ const inputFile = args[0];
 
 let seenLinks = new Set<string>();
 
-let languageStats: Record<string, { watchSeconds: number; lines: number, numberOfPfs: number, numberOfVideosAudio: number }> = {};
+let languageStats: Record<string, { watchSeconds: number; lines: number, numberOfPfs: number, numberOfVideosAudio: number, files: string[] }> = {};
 
-function updateLanguageStats(language: string, watchSeconds: number = 0, lines: number = 0, numberOfPfs: number = 0, numberOfVideosAudio: number = 0) {
+function updateLanguageStats(language: string, watchSeconds: number = 0, lines: number = 0, numberOfPfs: number = 0, numberOfVideosAudio: number = 0, location: string) {
     if ((numberOfVideosAudio > 0 && watchSeconds === 0) || (numberOfPfs > 0 && lines === 0)) {
         return;
     }
     if (!languageStats[language]) {
-        languageStats[language] = { watchSeconds: 0, lines: 0, numberOfPfs: 0, numberOfVideosAudio: 0 };
+        languageStats[language] = { watchSeconds: 0, lines: 0, numberOfPfs: 0, numberOfVideosAudio: 0, files: [] };
     }
     languageStats[language].watchSeconds += watchSeconds;
     languageStats[language].lines += lines;
     languageStats[language].numberOfPfs += numberOfPfs;
     languageStats[language].numberOfVideosAudio += numberOfVideosAudio;
+    languageStats[language].files.push(location);
 }
 
 function formatDuration(seconds: number): string {
@@ -52,11 +53,11 @@ async function processFile(dirPath: string, item: string) {
         const fileType = item.split('.').pop();
         if (fileType === 'mp3') {
             const duration = await getDurationInSecondsOfMp3File(itemPath);
-            updateLanguageStats('en', duration, 0, 0, 1);
+            updateLanguageStats('en', duration, 0, 0, 1, itemPath);
         } else if (fileType === 'pdf') {
             const lines = await getPdfLineCount(itemPath);
             const language = await getPdfLanguage(itemPath);
-            updateLanguageStats(language, 0, lines, 1, 0);
+            updateLanguageStats(language, 0, lines, 1, 0, itemPath);
 
             // Also extract and process links from PDF
             const links = await getAllLinksFromPdfFile(itemPath);
@@ -77,8 +78,9 @@ async function processFile(dirPath: string, item: string) {
             await Promise.all(promises);
         } else if (fileType === "mp4") {
             let duration = await getDurationInSecondsOfMp4File(itemPath);
-            updateLanguageStats('en', duration, 0, 0, 1);
+            updateLanguageStats('en', duration, 0, 0, 1, itemPath);
         } else {
+            updateLanguageStats('other', 0, 0, 0, 0, itemPath);
             console.warn(`Unknown file type: ${fileType}`);
         }
     }
@@ -103,7 +105,7 @@ async function processLink(link: string) {
         let title = await getYoutubeVideoTitle(link);
         let language = await detectLanguageFromTitle(title);
 
-        updateLanguageStats(language, duration, 0, 0, 1);
+        updateLanguageStats(language, duration, 0, 0, 1, link);
     } else if (link.includes("drive.google.com")) {
         try {
             let filePath = await downloadFileFromGdrive(link);
@@ -114,11 +116,12 @@ async function processLink(link: string) {
         // } else if (link.includes("vimeo.com")) {
         //     try {
         //         let duration = await getVimeoVideoDurationFromLink(link);
-        //         updateLanguageStats('en', duration, 0, 0, 1);
+        //         updateLanguageStats('en', duration, 0, 0, 1, link);
         //     } catch (error) {
         //         console.error(`Failed to get Vimeo video duration: ${link}. Error: ${(error as any).message}`);
         //     }
     } else {
+        updateLanguageStats('other', 0, 0, 0, 0, link);
         console.warn(`Unknown link type: ${link}`);
     }
 }
@@ -136,6 +139,37 @@ async function main() {
         const languageDisplayName = getLanguageDisplayName(language);
         console.log(`${languageDisplayName} - Watch time: ${formatDuration(stats.watchSeconds)}, Lines: ${stats.lines}, PDFs: ${stats.numberOfPfs}, Videos/Audio: ${stats.numberOfVideosAudio}`);
     }
+    for (const language of sortedLanguages) {
+        let files = languageStats[language].files;
+        let allLinks = [];
+        for (const file of files) {
+            if (isLink(file)) {
+                allLinks.push(file);
+            } else {
+                const relativePath = path.relative("./", file);
+                const languageDir = path.join("./languages", language);
+                const targetDir = path.join(languageDir, path.dirname(relativePath));
+                const targetPath = path.join(languageDir, relativePath);
+
+                if (!fs.existsSync(targetDir)) {
+                    fs.mkdirSync(targetDir, { recursive: true });
+                }
+                fs.copyFileSync(file, targetPath);
+            }
+        }
+        if (allLinks.length > 0) {
+            const languageDir = path.join("./languages", language);
+            const linksFilePath = path.join(languageDir, "links.txt");
+            if (!fs.existsSync(languageDir)) {
+                fs.mkdirSync(languageDir, { recursive: true });
+            }
+            fs.writeFileSync(linksFilePath, allLinks.join("\n"), "utf-8");
+        }
+    }
+}
+
+function isLink(file: string) {
+    return file.startsWith("https://") || file.startsWith("http://")
 }
 
 main();
