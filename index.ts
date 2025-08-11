@@ -127,43 +127,56 @@ async function processLink(link: string) {
 }
 
 async function main() {
-    if (!fs.existsSync("./temp")) {
-        fs.mkdirSync("./temp");
-    }
-    await processFile("./", inputFile);
-    console.log("\n------------------------\n");
-    console.log('--- Language Breakdown ---');
-    const sortedLanguages = Object.keys(languageStats).sort();
-    for (const language of sortedLanguages) {
-        const stats = languageStats[language];
-        const languageDisplayName = getLanguageDisplayName(language);
-        console.log(`${languageDisplayName} - Watch time: ${formatDuration(stats.watchSeconds)}, Lines: ${stats.lines}, PDFs: ${stats.numberOfPfs}, Videos/Audio: ${stats.numberOfVideosAudio}`);
-    }
-    for (const language of sortedLanguages) {
-        let files = languageStats[language].files;
-        let allLinks = [];
-        for (const file of files) {
-            if (isLink(file)) {
-                allLinks.push(file);
-            } else {
-                const relativePath = path.relative("./", file);
-                const languageDir = path.join("./languages", language);
-                const targetDir = path.join(languageDir, path.dirname(relativePath));
-                const targetPath = path.join(languageDir, relativePath);
+    try {
+        if (!fs.existsSync("./temp")) {
+            fs.mkdirSync("./temp");
+        }
+        await processFile("./", inputFile);
+        console.log("\n------------------------\n");
+        console.log('--- Language Breakdown ---');
+        const sortedLanguages = Object.keys(languageStats).sort();
+        for (const language of sortedLanguages) {
+            const stats = languageStats[language];
+            const languageDisplayName = getLanguageDisplayName(language);
+            console.log(`${languageDisplayName} - Watch time: ${formatDuration(stats.watchSeconds)}, Lines: ${stats.lines}, PDFs: ${stats.numberOfPfs}, Videos/Audio: ${stats.numberOfVideosAudio}`);
+        }
+        for (const language of sortedLanguages) {
+            let files = languageStats[language].files;
+            let allLinks = [];
+            for (const file of files) {
+                if (isLink(file)) {
+                    allLinks.push(file);
+                } else {
+                    const relativePath = path.relative("./", file);
+                    const languageDir = path.join("./languages", language);
+                    const targetDir = path.join(languageDir, path.dirname(relativePath));
+                    const targetPath = path.join(languageDir, relativePath);
 
-                if (!fs.existsSync(targetDir)) {
-                    fs.mkdirSync(targetDir, { recursive: true });
+                    if (!fs.existsSync(targetDir)) {
+                        fs.mkdirSync(targetDir, { recursive: true });
+                    }
+                    fs.copyFileSync(file, targetPath);
                 }
-                fs.copyFileSync(file, targetPath);
+            }
+            if (allLinks.length > 0) {
+                const languageDir = path.join("./languages", language);
+                const linksFilePath = path.join(languageDir, "links.txt");
+                if (!fs.existsSync(languageDir)) {
+                    fs.mkdirSync(languageDir, { recursive: true });
+                }
+                fs.writeFileSync(linksFilePath, allLinks.join("\n"), "utf-8");
             }
         }
-        if (allLinks.length > 0) {
-            const languageDir = path.join("./languages", language);
-            const linksFilePath = path.join(languageDir, "links.txt");
-            if (!fs.existsSync(languageDir)) {
-                fs.mkdirSync(languageDir, { recursive: true });
+    } finally {
+        if (fs.existsSync("./temp")) {
+            fs.rmSync("./temp", { recursive: true, force: true });
+        }
+        // Remove any unzipped folders
+        const currentDirContents = fs.readdirSync("./");
+        for (const item of currentDirContents) {
+            if (fs.statSync(item).isDirectory() && item.startsWith("unzipped-")) {
+                fs.rmSync(item, { recursive: true, force: true });
             }
-            fs.writeFileSync(linksFilePath, allLinks.join("\n"), "utf-8");
         }
     }
 }
