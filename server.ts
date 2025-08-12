@@ -73,11 +73,19 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+let isProcessing = false;
+
 app.post('/upload', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
         }
+
+        if (isProcessing) {
+            return res.status(429).json({ error: 'Server is currently processing another file. Please wait and try again.' });
+        }
+
+        isProcessing = true;
 
         const socketId = req.body.socketId;
         const clientSocket = io.sockets.sockets.get(socketId);
@@ -119,6 +127,8 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         res.status(500).json({
             error: error instanceof Error ? error.message : 'An error occurred during processing'
         });
+    } finally {
+        isProcessing = false;
     }
 });
 
