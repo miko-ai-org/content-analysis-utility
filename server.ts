@@ -7,6 +7,7 @@ import { Server } from 'socket.io';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
+import archiver from 'archiver';
 import { ContentAnalyzer } from './contentAnalyzer';
 
 const app = express();
@@ -75,6 +76,43 @@ app.get('/', (req, res) => {
 
 let isProcessing = false;
 
+// Utility function to create zip from languages folder
+async function zipLanguagesFolder(): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const timestamp = Date.now();
+        const zipFilePath = `./languages_${timestamp}.zip`;
+        const output = fs.createWriteStream(zipFilePath);
+        const archive = archiver('zip', {
+            zlib: { level: 9 } // Sets the compression level
+        });
+
+        output.on('close', () => {
+            console.log(`Created zip file: ${zipFilePath} (${archive.pointer()} total bytes)`);
+            resolve(zipFilePath);
+        });
+
+        output.on('error', (err) => {
+            reject(err);
+        });
+
+        archive.on('error', (err) => {
+            reject(err);
+        });
+
+        archive.pipe(output);
+
+        // Check if languages folder exists
+        if (fs.existsSync('./languages')) {
+            archive.directory('./languages/', false);
+        } else {
+            // Create empty zip if no languages folder exists
+            archive.append('No content found', { name: 'empty.txt' });
+        }
+
+        archive.finalize();
+    });
+}
+
 app.post('/upload', upload.single('file'), async (req, res) => {
     // Ensure temp directory exists
     if (!fs.existsSync("./temp")) {
@@ -112,10 +150,30 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         // Process the uploaded file
         const results = await analyzer.processFile('./uploads', req.file.filename);
 
-        // Send results
-        clientSocket.emit('processing-complete', results);
+        // Create zip file from languages folder
+        const zipFilePath = await zipLanguagesFolder();
+        const zipFileName = path.basename(zipFilePath);
+        const zipFileSize = fs.statSync(zipFilePath).size;
 
-        res.json({ success: true, message: 'File processed successfully' });
+        // Send results with zip file info
+        clientSocket.emit('processing-complete', {
+            ...results,
+            zipFile: {
+                filename: zipFileName,
+                size: zipFileSize,
+                downloadUrl: `/download/${zipFileName}`
+            }
+        });
+
+        res.json({
+            success: true,
+            message: 'File processed successfully',
+            zipFile: {
+                filename: zipFileName,
+                size: zipFileSize,
+                downloadUrl: `/download/${zipFileName}`
+            }
+        });
 
     } catch (error) {
         console.error('Upload error:', error);
@@ -142,6 +200,12 @@ app.post('/upload', upload.single('file'), async (req, res) => {
                 console.log('Cleaned up ./temp directory');
             }
 
+            // Remove languages directory if it exists
+            if (fs.existsSync("./languages")) {
+                fs.rmSync("./languages", { recursive: true, force: true });
+                console.log('Cleaned up ./languages directory');
+            }
+
             // Clean up uploads directory if it's empty (optional)
             const uploadsDir = './uploads';
             if (fs.existsSync(uploadsDir)) {
@@ -154,6 +218,44 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
         isProcessing = false;
     }
+});
+
+// Download endpoint for zip files
+app.get('/download/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(__dirname, filename);
+
+    // Verify file exists and is a zip file
+    if (!fs.existsSync(filePath) || !filename.endsWith('.zip')) {
+        return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Set appropriate headers for file download
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/zip');
+
+    // Send the file
+    res.sendFile(filePath, (err) => {
+        if (err) {
+            console.error('Error sending file:', err);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Error downloading file' });
+            }
+        } else {
+            console.log(`File ${filename} downloaded successfully`);
+            // Clean up the zip file after successful download
+            setTimeout(() => {
+                try {
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                        console.log(`Cleaned up zip file: ${filePath}`);
+                    }
+                } catch (error) {
+                    console.error(`Failed to delete zip file ${filePath}:`, error);
+                }
+            }, 1000); // Wait 1 second before cleanup
+        }
+    });
 });
 
 // Error handling middleware

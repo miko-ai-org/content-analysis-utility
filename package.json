@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/archiver": "^6.0.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.23",
     "@types/fluent-ffmpeg": "^2.1.27",
@@ -17,6 +18,7 @@
     "@types/multer": "^1.4.13",
     "@types/pdf-parse": "^1.1.5",
     "@types/unzipper": "^0.10.11",
+    "archiver": "^7.0.1",
     "axios": "^1.10.0",
     "cld3-asm": "^4.0.0",
     "cors": "^2.8.5",

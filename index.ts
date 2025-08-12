@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ debug: false });
 import { getAllLinksFromXlsxFile, getAllLinksFromPdfFile, getDurationInSecondsOfMp3File, getPdfLineCount, unzip, getYoutubeVideoDurationInSeconds, downloadFileFromGdrive, getDurationInSecondsOfMp4File, getPdfLanguage, getYoutubeVideoTitle, detectLanguageFromTitle } from './utils';
-import { getLanguageDisplayName } from './detectLanguage';
 import * as fs from 'fs';
 import * as path from 'path';
 

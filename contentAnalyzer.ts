@@ -60,7 +60,7 @@ export class ContentAnalyzer {
         // Format results
         const formattedResults = this.formatResults(languageStats);
 
-        await saveFilesByLanguage();
+        saveFilesByLanguage();
 
         this.updateProgress('complete', 'Processing complete!');
 
