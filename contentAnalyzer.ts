@@ -28,8 +28,6 @@ export interface ProgressUpdate {
 
 export class ContentAnalyzer {
     private progressCallback?: (progress: ProgressUpdate) => void;
-    private totalFiles = 0;
-    private processedFiles = 0;
 
     constructor(progressCallback?: (progress: ProgressUpdate) => void) {
         this.progressCallback = progressCallback;
@@ -37,59 +35,28 @@ export class ContentAnalyzer {
 
     private updateProgress(type: ProgressUpdate['type'], message: string, currentFile?: string) {
         if (this.progressCallback) {
-            const progress = this.totalFiles > 0 ? (this.processedFiles / this.totalFiles) * 100 : 0;
             this.progressCallback({
                 type,
                 message,
                 currentFile,
-                progress
             });
         }
-    }
-
-    private async countFiles(dirPath: string): Promise<number> {
-        let count = 0;
-        const items = fs.readdirSync(dirPath);
-
-        for (const item of items) {
-            const itemPath = require('path').join(dirPath, item);
-            const stats = fs.statSync(itemPath);
-
-            if (stats.isDirectory()) {
-                count += await this.countFiles(itemPath);
-            } else if (stats.isFile()) {
-                count++;
-            }
-        }
-
-        return count;
     }
 
     async processFile(dirPath: string, item: string): Promise<ProcessingResults> {
         // Reset state using index.ts function
         resetStats();
-        this.processedFiles = 0;
-
-        const itemPath = require('path').join(dirPath, item);
-
-        // Count total files first for progress tracking
-        const stats = fs.statSync(itemPath);
-        if (stats.isDirectory()) {
-            this.totalFiles = await this.countFiles(itemPath);
-        } else {
-            this.totalFiles = 1;
-        }
 
         // Ensure temp directory exists
         if (!fs.existsSync("./temp")) {
             fs.mkdirSync("./temp");
         }
 
-        this.updateProgress('file', 'Starting processing...', item);
+        this.updateProgress('file', 'Processing files...', item);
 
         try {
             // Use the processFile function from index.ts
-            await processFile(dirPath, item);
+            await processFile(dirPath, item, (fileName) => this.updateProgress('file', 'Processing files...', fileName));
 
             // Get results using index.ts function
             const languageStats = getLanguageStats();

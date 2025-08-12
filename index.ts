@@ -41,13 +41,14 @@ export function formatDuration(seconds: number): string {
     }
 }
 
-export async function processFile(dirPath: string, item: string) {
+export async function processFile(dirPath: string, item: string, updateProgressCallback: (fileName: string) => void) {
+    updateProgressCallback(item);
     const itemPath = path.join(dirPath, item);
     const stats = fs.statSync(itemPath);
 
     if (stats.isDirectory()) {
         // Recursively process subdirectory
-        await processDirectory(itemPath);
+        await processDirectory(itemPath, updateProgressCallback);
     } else if (stats.isFile()) {
         // Process file
         const fileType = item.split('.').pop();
@@ -63,17 +64,17 @@ export async function processFile(dirPath: string, item: string) {
             const links = await getAllLinksFromPdfFile(itemPath);
             let promises = [];
             for (const link of links) {
-                promises.push(processLink(link));
+                promises.push(processLink(link, updateProgressCallback));
             }
             await Promise.all(promises);
         } else if (fileType === 'zip') {
             let dir = await unzip(dirPath, itemPath);
-            await processDirectory(dir);
+            await processDirectory(dir, updateProgressCallback);
         } else if (fileType === "xlsx") {
             let links = await getAllLinksFromXlsxFile(itemPath);
             let promises = [];
             for (const link of links) {
-                promises.push(processLink(link));
+                promises.push(processLink(link, updateProgressCallback));
             }
             await Promise.all(promises);
         } else if (fileType === "mp4") {
@@ -86,16 +87,16 @@ export async function processFile(dirPath: string, item: string) {
     }
 }
 
-export async function processDirectory(dirPath: string) {
+export async function processDirectory(dirPath: string, updateProgressCallback: (fileName: string) => void) {
     const items = fs.readdirSync(dirPath);
     let promises = [];
     for (const item of items) {
-        promises.push(processFile(dirPath, item));
+        promises.push(processFile(dirPath, item, updateProgressCallback));
     }
     await Promise.all(promises);
 }
 
-export async function processLink(link: string) {
+export async function processLink(link: string, updateProgressCallback: (fileName: string) => void) {
     if (seenLinks.has(link)) {
         return;
     }
@@ -109,7 +110,7 @@ export async function processLink(link: string) {
     } else if (link.includes("drive.google.com")) {
         try {
             let filePath = await downloadFileFromGdrive(link);
-            await processFile(path.dirname(filePath), path.basename(filePath));
+            await processFile(path.dirname(filePath), path.basename(filePath), updateProgressCallback);
         } catch (error) {
             console.error(`Failed to download file from Drive: ${link}. Error: ${(error as any).message}`);
         }
