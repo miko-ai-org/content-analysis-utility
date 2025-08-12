@@ -10,7 +10,7 @@ import { Browser } from 'puppeteer';
 import puppeteer from 'puppeteer-extra';
 import { PDFDocument, PDFDict, PDFName, PDFArray, PDFString } from 'pdf-lib';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import ISO6391 from 'iso-639-1';
+import archiver from 'archiver';
 import { detectLanguage } from './detectLanguage';
 
 export async function unzip(pathPrefix: string, zipFile: string): Promise<string> {
@@ -445,4 +445,41 @@ async function processVimeoRequestQueue(url: string) {
     } finally {
         await page.close();
     }
+}
+
+// Utility function to create zip from languages folder
+export async function zipLanguagesFolder(): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const timestamp = Date.now();
+        const zipFilePath = `./languages_${timestamp}.zip`;
+        const output = fs.createWriteStream(zipFilePath);
+        const archive = archiver('zip', {
+            zlib: { level: 9 } // Sets the compression level
+        });
+
+        output.on('close', () => {
+            console.log(`Created zip file: ${zipFilePath} (${archive.pointer()} total bytes)`);
+            resolve(zipFilePath);
+        });
+
+        output.on('error', (err) => {
+            reject(err);
+        });
+
+        archive.on('error', (err) => {
+            reject(err);
+        });
+
+        archive.pipe(output);
+
+        // Check if languages folder exists
+        if (fs.existsSync('./languages')) {
+            archive.directory('./languages/', false);
+        } else {
+            // Create empty zip if no languages folder exists
+            archive.append('No content found', { name: 'empty.txt' });
+        }
+
+        archive.finalize();
+    });
 }

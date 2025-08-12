@@ -7,7 +7,7 @@ import { Server } from 'socket.io';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
-import archiver from 'archiver';
+import { zipLanguagesFolder } from './utils';
 import { ContentAnalyzer } from './contentAnalyzer';
 
 const app = express();
@@ -75,43 +75,6 @@ app.get('/', (req, res) => {
 });
 
 let isProcessing = false;
-
-// Utility function to create zip from languages folder
-async function zipLanguagesFolder(): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const timestamp = Date.now();
-        const zipFilePath = `./languages_${timestamp}.zip`;
-        const output = fs.createWriteStream(zipFilePath);
-        const archive = archiver('zip', {
-            zlib: { level: 9 } // Sets the compression level
-        });
-
-        output.on('close', () => {
-            console.log(`Created zip file: ${zipFilePath} (${archive.pointer()} total bytes)`);
-            resolve(zipFilePath);
-        });
-
-        output.on('error', (err) => {
-            reject(err);
-        });
-
-        archive.on('error', (err) => {
-            reject(err);
-        });
-
-        archive.pipe(output);
-
-        // Check if languages folder exists
-        if (fs.existsSync('./languages')) {
-            archive.directory('./languages/', false);
-        } else {
-            // Create empty zip if no languages folder exists
-            archive.append('No content found', { name: 'empty.txt' });
-        }
-
-        archive.finalize();
-    });
-}
 
 app.post('/upload', upload.single('file'), async (req, res) => {
     // Ensure temp directory exists
