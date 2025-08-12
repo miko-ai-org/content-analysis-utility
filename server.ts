@@ -9,6 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import { zipLanguagesFolder } from './utils';
 import { ContentAnalyzer } from './contentAnalyzer';
+import { authorizeDesktop } from './driveDownloader';
 
 const app = express();
 const server = http.createServer(app);
@@ -91,6 +92,10 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         }
 
         isProcessing = true;
+
+        // we call this here so that we can authorize the with google before handling the files so that
+        // we don't end up opening many browser windows in case we need the user to login.
+        await authorizeDesktop();
 
         const socketId = req.body.socketId;
         const clientSocket = io.sockets.sockets.get(socketId);
