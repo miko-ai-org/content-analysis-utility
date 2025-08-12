@@ -12,7 +12,7 @@ let seenLinks = new Set<string>();
 
 let languageStats: Record<string, { watchSeconds: number; lines: number, numberOfPfs: number, numberOfVideosAudio: number, files: string[] }> = {};
 
-function updateLanguageStats(language: string, watchSeconds: number = 0, lines: number = 0, numberOfPfs: number = 0, numberOfVideosAudio: number = 0, location: string) {
+export function updateLanguageStats(language: string, watchSeconds: number = 0, lines: number = 0, numberOfPfs: number = 0, numberOfVideosAudio: number = 0, location: string) {
     if ((numberOfVideosAudio > 0 && watchSeconds === 0) || (numberOfPfs > 0 && lines === 0)) {
         return;
     }
@@ -26,7 +26,7 @@ function updateLanguageStats(language: string, watchSeconds: number = 0, lines: 
     languageStats[language].files.push(location);
 }
 
-function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number): string {
     if (seconds < 60) {
         return `${seconds.toFixed(1)} seconds`;
     } else if (seconds < 3600) {
@@ -41,7 +41,7 @@ function formatDuration(seconds: number): string {
     }
 }
 
-async function processFile(dirPath: string, item: string) {
+export async function processFile(dirPath: string, item: string) {
     const itemPath = path.join(dirPath, item);
     const stats = fs.statSync(itemPath);
 
@@ -86,7 +86,7 @@ async function processFile(dirPath: string, item: string) {
     }
 }
 
-async function processDirectory(dirPath: string) {
+export async function processDirectory(dirPath: string) {
     const items = fs.readdirSync(dirPath);
     let promises = [];
     for (const item of items) {
@@ -95,7 +95,7 @@ async function processDirectory(dirPath: string) {
     await Promise.all(promises);
 }
 
-async function processLink(link: string) {
+export async function processLink(link: string) {
     if (seenLinks.has(link)) {
         return;
     }
@@ -126,63 +126,46 @@ async function processLink(link: string) {
     }
 }
 
-async function main() {
-    try {
-        if (!fs.existsSync("./temp")) {
-            fs.mkdirSync("./temp");
-        }
-        await processFile("./", inputFile);
-        console.log("\n------------------------\n");
-        console.log('--- Language Breakdown ---');
-        const sortedLanguages = Object.keys(languageStats).sort();
-        for (const language of sortedLanguages) {
-            const stats = languageStats[language];
-            const languageDisplayName = getLanguageDisplayName(language);
-            console.log(`${languageDisplayName} - Watch time: ${formatDuration(stats.watchSeconds)}, Lines: ${stats.lines}, PDFs: ${stats.numberOfPfs}, Videos/Audio: ${stats.numberOfVideosAudio}`);
-        }
-        for (const language of sortedLanguages) {
-            let files = languageStats[language].files;
-            let allLinks = [];
-            for (const file of files) {
-                if (isLink(file)) {
-                    allLinks.push(file);
-                } else {
-                    const relativePath = path.relative("./", file);
-                    const languageDir = path.join("./languages", language);
-                    const targetDir = path.join(languageDir, path.dirname(relativePath));
-                    const targetPath = path.join(languageDir, relativePath);
+export function resetStats() {
+    seenLinks.clear();
+    languageStats = {};
+}
 
-                    if (!fs.existsSync(targetDir)) {
-                        fs.mkdirSync(targetDir, { recursive: true });
-                    }
-                    fs.copyFileSync(file, targetPath);
-                }
-            }
-            if (allLinks.length > 0) {
+export function getLanguageStats() {
+    return { ...languageStats };
+}
+
+export function isLink(file: string) {
+    return file.startsWith("https://") || file.startsWith("http://");
+}
+
+export function saveFilesByLanguage() {
+    const sortedLanguages = Object.keys(languageStats).sort();
+    for (const language of sortedLanguages) {
+        let files = languageStats[language].files;
+        let allLinks = [];
+        for (const file of files) {
+            if (isLink(file)) {
+                allLinks.push(file);
+            } else {
+                const relativePath = path.relative("./", file);
                 const languageDir = path.join("./languages", language);
-                const linksFilePath = path.join(languageDir, "links.txt");
-                if (!fs.existsSync(languageDir)) {
-                    fs.mkdirSync(languageDir, { recursive: true });
+                const targetDir = path.join(languageDir, path.dirname(relativePath));
+                const targetPath = path.join(languageDir, relativePath);
+
+                if (!fs.existsSync(targetDir)) {
+                    fs.mkdirSync(targetDir, { recursive: true });
                 }
-                fs.writeFileSync(linksFilePath, allLinks.join("\n"), "utf-8");
+                fs.copyFileSync(file, targetPath);
             }
         }
-    } finally {
-        if (fs.existsSync("./temp")) {
-            fs.rmSync("./temp", { recursive: true, force: true });
-        }
-        // Remove any unzipped folders
-        const currentDirContents = fs.readdirSync("./");
-        for (const item of currentDirContents) {
-            if (fs.statSync(item).isDirectory() && item.startsWith("unzipped-")) {
-                fs.rmSync(item, { recursive: true, force: true });
+        if (allLinks.length > 0) {
+            const languageDir = path.join("./languages", language);
+            const linksFilePath = path.join(languageDir, "links.txt");
+            if (!fs.existsSync(languageDir)) {
+                fs.mkdirSync(languageDir, { recursive: true });
             }
+            fs.writeFileSync(linksFilePath, allLinks.join("\n"), "utf-8");
         }
     }
 }
-
-function isLink(file: string) {
-    return file.startsWith("https://") || file.startsWith("http://")
-}
-
-main();

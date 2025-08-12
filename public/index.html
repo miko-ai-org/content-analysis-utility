@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Analysis Utility</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 800px;
+            padding: 40px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+
+        .drop-zone {
+            border: 3px dashed #ccc;
+            border-radius: 15px;
+            padding: 60px 20px;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            background: #fafafa;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.dragover {
+            border-color: #667eea;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+        }
+
+        .drop-zone.processing {
+            border-color: #ffa500;
+            background: #fff8e1;
+        }
+
+        .drop-icon {
+            font-size: 4rem;
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone:hover .drop-icon,
+        .drop-zone.dragover .drop-icon {
+            color: #667eea;
+        }
+
+        .drop-text {
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .drop-subtext {
+            font-size: 0.9rem;
+            color: #999;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .progress-container {
+            display: none;
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            height: 20px;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            color: #666;
+            font-size: 0.9rem;
+            margin: 5px 0;
+        }
+
+        .results-container {
+            display: none;
+            text-align: left;
+            margin-top: 30px;
+        }
+
+        .results-header {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            border-radius: 10px 10px 0 0;
+            font-weight: 600;
+        }
+
+        .results-content {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .language-item {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .language-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .language-stats {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .error {
+            color: #e74c3c;
+            background: #fdf2f2;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .success {
+            color: #27ae60;
+            background: #f1f8f6;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #27ae60;
+        }
+
+        .reset-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .reset-btn:hover {
+            background: #5a6fd8;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .drop-zone {
+                padding: 40px 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>📊 Content Analysis Utility</h1>
+        <p class="subtitle">Analyze your content files and get detailed insights by language and media type</p>
+
+        <div class="drop-zone" id="dropZone">
+            <div class="drop-icon">📁</div>
+            <div class="drop-text">Drag and drop your file here</div>
+            <div class="drop-subtext">or click to browse (PDF, MP3, MP4, ZIP, XLSX up to 500MB)</div>
+            <input type="file" class="file-input" id="fileInput" accept=".pdf,.mp3,.mp4,.zip,.xlsx">
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-text" id="progressText">Preparing to process...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="currentFile"></div>
+        </div>
+
+        <div id="errorContainer"></div>
+
+        <div class="results-container" id="resultsContainer">
+            <div class="results-header">
+                📈 Analysis Results
+            </div>
+            <div class="results-content">
+                <div class="summary-stats" id="summaryStats"></div>
+                <div id="languageBreakdown"></div>
+            </div>
+            <button class="reset-btn" onclick="resetAnalysis()">Analyze Another File</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const currentFile = document.getElementById('currentFile');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const errorContainer = document.getElementById('errorContainer');
+
+        // Drag and drop handlers
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', handleDragOver);
+        dropZone.addEventListener('dragleave', handleDragLeave);
+        dropZone.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function processFile(file) {
+            clearError();
+            hideResults();
+            showProgress();
+            dropZone.classList.add('processing');
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('socketId', socket.id);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        throw new Error(data.error || 'Upload failed');
+                    }
+                })
+                .catch(error => {
+                    hideProgress();
+                    showError(error.message);
+                    resetDropZone();
+                });
+        }
+
+        // Socket event handlers
+        socket.on('processing-start', (data) => {
+            progressText.textContent = `Processing ${data.filename}...`;
+            currentFile.textContent = `File size: ${formatFileSize(data.size)}`;
+        });
+
+        socket.on('processing-progress', (progress) => {
+            progressFill.style.width = `${progress.progress || 0}%`;
+            progressText.textContent = progress.message;
+            if (progress.currentFile) {
+                currentFile.textContent = `Current: ${progress.currentFile}`;
+            }
+        });
+
+        socket.on('processing-complete', (results) => {
+            hideProgress();
+            showResults(results);
+            resetDropZone();
+        });
+
+        function showProgress() {
+            progressContainer.style.display = 'block';
+            progressFill.style.width = '0%';
+        }
+
+        function hideProgress() {
+            progressContainer.style.display = 'none';
+        }
+
+        function showResults(results) {
+            const summaryStats = document.getElementById('summaryStats');
+            const languageBreakdown = document.getElementById('languageBreakdown');
+
+            // Clear previous results
+            summaryStats.innerHTML = '';
+            languageBreakdown.innerHTML = '';
+
+            // Show summary stats
+            summaryStats.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${formatDuration(results.totalWatchSeconds)}</div>
+                    <div class="stat-label">Total Watch Time</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${results.totalLines.toLocaleString()}</div>
+                    <div class="stat-label">Total Lines</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${results.totalPdfs}</div>
+                    <div class="stat-label">PDF Files</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${results.totalVideosAudio}</div>
+                    <div class="stat-label">Media Files</div>
+                </div>
+            `;
+
+            // Show language breakdown
+            const sortedLanguages = Object.keys(results.languageStats).sort();
+            for (const language of sortedLanguages) {
+                const stats = results.languageStats[language];
+                const languageDiv = document.createElement('div');
+                languageDiv.className = 'language-item';
+                languageDiv.innerHTML = `
+                    <div class="language-name">${language}</div>
+                    <div class="language-stats">
+                        Watch time: ${formatDuration(stats.watchSeconds)} • 
+                        Lines: ${stats.lines.toLocaleString()} • 
+                        PDFs: ${stats.numberOfPfs} • 
+                        Videos/Audio: ${stats.numberOfVideosAudio}
+                    </div>
+                `;
+                languageBreakdown.appendChild(languageDiv);
+            }
+
+            resultsContainer.style.display = 'block';
+        }
+
+        function hideResults() {
+            resultsContainer.style.display = 'none';
+        }
+
+        function showError(message) {
+            errorContainer.innerHTML = `<div class="error">❌ Error: ${message}</div>`;
+        }
+
+        function clearError() {
+            errorContainer.innerHTML = '';
+        }
+
+        function resetDropZone() {
+            dropZone.classList.remove('processing');
+            fileInput.value = '';
+        }
+
+        function resetAnalysis() {
+            hideResults();
+            clearError();
+            resetDropZone();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDuration(seconds) {
+            if (seconds < 60) {
+                return `${seconds.toFixed(1)} seconds`;
+            } else if (seconds < 3600) {
+                const minutes = seconds / 60;
+                return `${minutes.toFixed(1)} minutes`;
+            } else if (seconds < 86400) {
+                const hours = seconds / 3600;
+                return `${hours.toFixed(1)} hours`;
+            } else {
+                const days = seconds / 86400;
+                return `${days.toFixed(1)} days`;
+            }
+        }
+    </script>
+</body>
+
+</html>
