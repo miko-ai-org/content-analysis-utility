@@ -1,6 +1,5 @@
-import { processFile, resetStats, getLanguageStats, formatDuration } from './index';
+import { processFile, resetStats, getLanguageStats, formatDuration, saveFilesByLanguage } from './index';
 import { getLanguageDisplayName } from './detectLanguage';
-import * as fs from 'fs';
 
 export interface LanguageStats {
     watchSeconds: number;
@@ -47,46 +46,29 @@ export class ContentAnalyzer {
         // Reset state using index.ts function
         resetStats();
 
-        // Ensure temp directory exists
-        if (!fs.existsSync("./temp")) {
-            fs.mkdirSync("./temp");
-        }
-
         this.updateProgress('file', 'Processing files...', item);
 
-        try {
-            // Use the processFile function from index.ts
-            await processFile(dirPath, item, (fileName) => this.updateProgress('file', 'Processing files...', fileName));
+        // Use the processFile function from index.ts
+        await processFile(dirPath, item, (fileName) => this.updateProgress('file', 'Processing files...', fileName));
 
-            // Get results using index.ts function
-            const languageStats = getLanguageStats();
+        // Get results using index.ts function
+        const languageStats = getLanguageStats();
 
-            // Calculate totals
-            const totals = this.calculateTotals(languageStats);
+        // Calculate totals
+        const totals = this.calculateTotals(languageStats);
 
-            // Format results
-            const formattedResults = this.formatResults(languageStats);
+        // Format results
+        const formattedResults = this.formatResults(languageStats);
 
-            this.updateProgress('complete', 'Processing complete!');
+        await saveFilesByLanguage();
 
-            return {
-                languageStats,
-                ...totals,
-                formattedResults
-            };
-        } finally {
-            // Cleanup
-            if (fs.existsSync("./temp")) {
-                fs.rmSync("./temp", { recursive: true, force: true });
-            }
-            // Remove any unzipped folders
-            const currentDirContents = fs.readdirSync("./");
-            for (const item of currentDirContents) {
-                if (fs.statSync(item).isDirectory() && item.startsWith("unzipped-")) {
-                    fs.rmSync(item, { recursive: true, force: true });
-                }
-            }
-        }
+        this.updateProgress('complete', 'Processing complete!');
+
+        return {
+            languageStats,
+            ...totals,
+            formattedResults
+        };
     }
 
     private calculateTotals(languageStats: Record<string, LanguageStats>) {

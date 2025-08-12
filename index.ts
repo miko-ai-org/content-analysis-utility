@@ -5,9 +5,6 @@ import { getLanguageDisplayName } from './detectLanguage';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const args = process.argv.slice(2);
-const inputFile = args[0];
-
 let seenLinks = new Set<string>();
 
 let languageStats: Record<string, { watchSeconds: number; lines: number, numberOfPfs: number, numberOfVideosAudio: number, files: string[] }> = {};

@@ -76,6 +76,10 @@ app.get('/', (req, res) => {
 let isProcessing = false;
 
 app.post('/upload', upload.single('file'), async (req, res) => {
+    // Ensure temp directory exists
+    if (!fs.existsSync("./temp")) {
+        fs.mkdirSync("./temp");
+    }
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
@@ -111,23 +115,43 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         // Send results
         clientSocket.emit('processing-complete', results);
 
-        // Clean up uploaded file
-        fs.unlinkSync(req.file.path);
-
         res.json({ success: true, message: 'File processed successfully' });
 
     } catch (error) {
         console.error('Upload error:', error);
 
-        // Clean up file if it exists
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-
         res.status(500).json({
             error: error instanceof Error ? error.message : 'An error occurred during processing'
         });
     } finally {
+        // Cleanup uploaded file
+        if (req.file && fs.existsSync(req.file.path)) {
+            try {
+                fs.unlinkSync(req.file.path);
+                console.log(`Cleaned up uploaded file: ${req.file.path}`);
+            } catch (error) {
+                console.error(`Failed to delete uploaded file ${req.file.path}:`, error);
+            }
+        }
+
+        // Clean up any remaining temporary directories
+        try {
+            // Remove temp directory if it exists
+            if (fs.existsSync("./temp")) {
+                fs.rmSync("./temp", { recursive: true, force: true });
+                console.log('Cleaned up ./temp directory');
+            }
+
+            // Clean up uploads directory if it's empty (optional)
+            const uploadsDir = './uploads';
+            if (fs.existsSync(uploadsDir)) {
+                fs.rmSync(uploadsDir, { recursive: true, force: true });
+                console.log('Cleaned up uploads directory');
+            }
+        } catch (error) {
+            console.error('Error during cleanup:', error);
+        }
+
         isProcessing = false;
     }
 });
