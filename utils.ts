@@ -6,10 +6,10 @@ import pdf from 'pdf-parse';
 import axios from 'axios';
 import * as xlsx from 'xlsx';
 import { downloadDriveFileWithOAuth } from './driveDownloader';
-import { Browser } from 'puppeteer';
-import puppeteer from 'puppeteer-extra';
+// import { Browser } from 'puppeteer';
+// import puppeteer from 'puppeteer-extra';
 import { PDFDocument, PDFDict, PDFName, PDFArray, PDFString } from 'pdf-lib';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+// import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import archiver from 'archiver';
 import { detectLanguage } from './detectLanguage';
 
@@ -325,127 +325,127 @@ function extractDriveFileId(link: string): string | null {
     return match ? match[1] : null;
 }
 
-let browser: Browser | null = null;
+// let browser: Browser | null = null;
 
-let vimeoRequestQueue: string[] = [];
+// let vimeoRequestQueue: string[] = [];
 
-export async function getVimeoVideoDurationFromLink(url: string): Promise<number> {
-    if (url.includes("/review/")) {
-        return await getVimeoVideoDurationUsingBrowser(url);
-    } else if (url.includes("folder")) {
-        throw new Error("Folder links are not supported yet");
-    } else {
-        try {
-            return await getVimeoVideoDurationOfLinkUsingAPI(url);
-        } catch (error) {
-            return await getVimeoVideoDurationUsingBrowser(url);
-        }
-    }
-}
+// export async function getVimeoVideoDurationFromLink(url: string): Promise<number> {
+//     if (url.includes("/review/")) {
+//         return await getVimeoVideoDurationUsingBrowser(url);
+//     } else if (url.includes("folder")) {
+//         throw new Error("Folder links are not supported yet");
+//     } else {
+//         try {
+//             return await getVimeoVideoDurationOfLinkUsingAPI(url);
+//         } catch (error) {
+//             return await getVimeoVideoDurationUsingBrowser(url);
+//         }
+//     }
+// }
 
-async function getVimeoVideoDurationOfLinkUsingAPI(url: string): Promise<number> {
-    const oembedUrl = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`;
-    const oembedRes = await axios.get(oembedUrl, { timeout: 5000 });
-    if (typeof oembedRes.data.duration === 'number') {
-        return oembedRes.data.duration;
-    }
-    throw new Error(`Failed to get Vimeo video duration: ${url}. Error: ${(oembedRes.data as any).message}`);
-}
+// async function getVimeoVideoDurationOfLinkUsingAPI(url: string): Promise<number> {
+//     const oembedUrl = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`;
+//     const oembedRes = await axios.get(oembedUrl, { timeout: 5000 });
+//     if (typeof oembedRes.data.duration === 'number') {
+//         return oembedRes.data.duration;
+//     }
+//     throw new Error(`Failed to get Vimeo video duration: ${url}. Error: ${(oembedRes.data as any).message}`);
+// }
 
-async function getVimeoVideoDurationUsingBrowser(url: string) {
-    vimeoRequestQueue.push(url);
-    while (vimeoRequestQueue[0] !== url) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    try {
-        return await processVimeoRequestQueue(url);
-    } finally {
-        vimeoRequestQueue.shift();
-    }
-}
+// async function getVimeoVideoDurationUsingBrowser(url: string) {
+//     vimeoRequestQueue.push(url);
+//     while (vimeoRequestQueue[0] !== url) {
+//         await new Promise(resolve => setTimeout(resolve, 1000));
+//     }
+//     try {
+//         return await processVimeoRequestQueue(url);
+//     } finally {
+//         vimeoRequestQueue.shift();
+//     }
+// }
 
-async function processVimeoRequestQueue(url: string) {
-    if (!browser) {
-        puppeteer.use(StealthPlugin());
-        browser = await puppeteer.launch({
-            headless: false,
-            args: ['--start-maximized'],
-            defaultViewport: null,
-        });
-    }
+// async function processVimeoRequestQueue(url: string) {
+//     if (!browser) {
+//         puppeteer.use(StealthPlugin());
+//         browser = await puppeteer.launch({
+//             headless: false,
+//             args: ['--start-maximized'],
+//             defaultViewport: null,
+//         });
+//     }
 
-    const page = await browser.newPage();
-    await page.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
-    );
+//     const page = await browser.newPage();
+//     await page.setUserAgent(
+//         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+//     );
 
-    try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+//     try {
+//         await page.goto(url, { waitUntil: 'networkidle2' });
 
-        let isCaptcha = await page.evaluate(() => {
-            const targetText = "To continue, please confirm that you're a human (and not a spambot).";
+//         let isCaptcha = await page.evaluate(() => {
+//             const targetText = "To continue, please confirm that you're a human (and not a spambot).";
 
-            for (const el of Array.from(document.querySelectorAll('*'))) {
-                if (el.textContent && el.textContent.includes(targetText)) {
-                    return true;
-                }
-            }
+//             for (const el of Array.from(document.querySelectorAll('*'))) {
+//                 if (el.textContent && el.textContent.includes(targetText)) {
+//                     return true;
+//                 }
+//             }
 
-            return false;
-        });
+//             return false;
+//         });
 
-        if (isCaptcha) {
-            throw new Error(`Captcha detected for ${url}`);
-        }
+//         if (isCaptcha) {
+//             throw new Error(`Captcha detected for ${url}`);
+//         }
 
-        let isPasswordProtected = await page.evaluate(() => {
-            const targetText = "This video is password protected";
+//         let isPasswordProtected = await page.evaluate(() => {
+//             const targetText = "This video is password protected";
 
-            for (const el of Array.from(document.querySelectorAll('*'))) {
-                if (el.textContent && el.textContent.includes(targetText)) {
-                    return true;
-                }
-            }
+//             for (const el of Array.from(document.querySelectorAll('*'))) {
+//                 if (el.textContent && el.textContent.includes(targetText)) {
+//                     return true;
+//                 }
+//             }
 
-            return false;
-        });
+//             return false;
+//         });
 
-        if (isPasswordProtected) {
-            throw new Error(`Password protected video detected for ${url}`);
-        }
+//         if (isPasswordProtected) {
+//             throw new Error(`Password protected video detected for ${url}`);
+//         }
 
-        // Wait for video metadata to load
-        await page.waitForSelector('video', { timeout: 7000 });
+//         // Wait for video metadata to load
+//         await page.waitForSelector('video', { timeout: 7000 });
 
-        const duration = await page.evaluate(() => {
-            return new Promise<string | null>((resolve) => {
-                let div = document.querySelector('.Timecode_module_timecode__66300889');
-                if (!div) {
-                    return resolve(null);
-                }
-                let text = div.textContent;
-                return resolve(text);
-            });
-        });
+//         const duration = await page.evaluate(() => {
+//             return new Promise<string | null>((resolve) => {
+//                 let div = document.querySelector('.Timecode_module_timecode__66300889');
+//                 if (!div) {
+//                     return resolve(null);
+//                 }
+//                 let text = div.textContent;
+//                 return resolve(text);
+//             });
+//         });
 
-        if (!duration) {
-            throw new Error(`No duration found for ${url}`);
-        }
+//         if (!duration) {
+//             throw new Error(`No duration found for ${url}`);
+//         }
 
-        let splitted = duration.split(':').map(Number);
-        if (splitted.length === 2) {
-            return splitted[0] * 60 + splitted[1];
-        } else if (splitted.length === 3) {
-            return splitted[0] * 3600 + splitted[1] * 60 + splitted[2];
-        } else {
-            throw new Error(`Invalid duration format: ${duration}`);
-        }
-    } catch (err) {
-        throw new Error(`Failed to get duration for ${url}: ${err}`);
-    } finally {
-        await page.close();
-    }
-}
+//         let splitted = duration.split(':').map(Number);
+//         if (splitted.length === 2) {
+//             return splitted[0] * 60 + splitted[1];
+//         } else if (splitted.length === 3) {
+//             return splitted[0] * 3600 + splitted[1] * 60 + splitted[2];
+//         } else {
+//             throw new Error(`Invalid duration format: ${duration}`);
+//         }
+//     } catch (err) {
+//         throw new Error(`Failed to get duration for ${url}: ${err}`);
+//     } finally {
+//         await page.close();
+//     }
+// }
 
 // Utility function to create zip from languages folder
 export async function zipLanguagesFolder(): Promise<string> {
