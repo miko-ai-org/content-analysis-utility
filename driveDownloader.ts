@@ -6,7 +6,6 @@ import { OAuth2Client } from 'google-auth-library';
 import path from 'path';
 
 const SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
-const CREDENTIALS_PATH = path.resolve('credentials.json');
 const TOKEN_PATH = path.resolve('token.json');
 const REDIRECT_PORT = 5556;
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}`;
@@ -27,7 +26,7 @@ function openBrowser(url: string): Promise<void> {
 }
 
 export async function authorizeDesktop(): Promise<OAuth2Client> {
-    const creds = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
+    const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON!);
     const { client_id, client_secret } = creds.installed;
 
     const oAuth2Client = new google.auth.OAuth2(

@@ -11,9 +11,7 @@ npm install
 Set the following env vars:
 ```
 GOOGLE_API_KEY=
-VIMEO_CLIENT_ID=
-VIMEO_CLIENT_SECRET=
-VIMEO_ACCESS_TOKEN=
+GOOGLE_CREDENTIALS_JSON=
 ```
 
 The google api key should have youtube API access.
@@ -24,6 +22,6 @@ Create a desktop app OAuth client with Gdrive access, and download the credentia
 ## Usage
 
 ```bash
-npm start <zip-file>
+npm start
 ```
 
