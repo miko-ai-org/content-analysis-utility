@@ -97,12 +97,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         fs.mkdirSync("./temp");
     }
 
-    // delete zip file starting with languages_
-    const languagesZipFiles = fs.readdirSync("./").filter(file => file.startsWith("languages_"));
-    for (const file of languagesZipFiles) {
-        fs.unlinkSync(path.join("./", file));
-    }
-
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
@@ -113,6 +107,12 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         }
 
         isProcessing = true;
+
+        // delete zip file starting with languages_
+        const languagesZipFiles = fs.readdirSync("./").filter(file => file.startsWith("languages_"));
+        for (const file of languagesZipFiles) {
+            fs.unlinkSync(path.join("./", file));
+        }
 
         const socketId = req.body.socketId;
         const clientSocket = io.sockets.sockets.get(socketId);
