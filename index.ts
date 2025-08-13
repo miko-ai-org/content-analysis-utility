@@ -143,7 +143,7 @@ export function saveFilesByLanguage() {
             if (isLink(file)) {
                 allLinks.push(file);
             } else {
-                const relativePath = path.relative("./", file);
+                const relativePath = path.relative(process.env.DATA!, file);
                 const languageDir = path.join(process.env.DATA!, "languages", language);
                 const targetDir = path.join(languageDir, path.dirname(relativePath));
                 const targetPath = path.join(languageDir, relativePath);
