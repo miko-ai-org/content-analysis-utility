@@ -34,7 +34,7 @@ app.use(express.static('public'));
 // Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = process.env.DATA_DIR + 'uploads';
+        const uploadDir = process.env.DATA + 'uploads';
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
         }
@@ -90,8 +90,8 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     }
 
     // Ensure temp directory exists
-    if (!fs.existsSync(process.env.DATA_DIR + "temp")) {
-        fs.mkdirSync(process.env.DATA_DIR + "temp");
+    if (!fs.existsSync(process.env.DATA + "temp")) {
+        fs.mkdirSync(process.env.DATA + "temp");
     }
 
     try {
@@ -106,9 +106,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         isProcessing = true;
 
         // delete zip file starting with languages_
-        const languagesZipFiles = fs.readdirSync(process.env.DATA_DIR!).filter(file => file.startsWith("languages_"));
+        const languagesZipFiles = fs.readdirSync(process.env.DATA!).filter(file => file.startsWith("languages_"));
         for (const file of languagesZipFiles) {
-            fs.unlinkSync(path.join(process.env.DATA_DIR!, file));
+            fs.unlinkSync(path.join(process.env.DATA!, file));
         }
 
         const socketId = req.body.socketId;
@@ -131,7 +131,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
         // Process the uploaded file
         try {
-            const results = await analyzer.processFile(process.env.DATA_DIR + 'uploads', req.file.filename, googleAccessToken);
+            const results = await analyzer.processFile(process.env.DATA + 'uploads', req.file.filename, googleAccessToken);
 
             // Create zip file from languages folder
             const zipFilePath = await zipLanguagesFolder();
@@ -189,17 +189,17 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         // Clean up any remaining temporary directories
         try {
             // Remove temp directory if it exists
-            if (fs.existsSync(process.env.DATA_DIR + "temp")) {
-                fs.rmSync(process.env.DATA_DIR + "temp", { recursive: true, force: true });
+            if (fs.existsSync(process.env.DATA + "temp")) {
+                fs.rmSync(process.env.DATA + "temp", { recursive: true, force: true });
             }
 
             // Remove languages directory if it exists
-            if (fs.existsSync(process.env.DATA_DIR + "languages")) {
-                fs.rmSync(process.env.DATA_DIR + "languages", { recursive: true, force: true });
+            if (fs.existsSync(process.env.DATA + "languages")) {
+                fs.rmSync(process.env.DATA + "languages", { recursive: true, force: true });
             }
 
             // Clean up uploads directory if it's empty (optional)
-            const uploadsDir = process.env.DATA_DIR + 'uploads';
+            const uploadsDir = process.env.DATA + 'uploads';
             if (fs.existsSync(uploadsDir)) {
                 fs.rmSync(uploadsDir, { recursive: true, force: true });
             }
@@ -214,7 +214,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 // Download endpoint for zip files
 app.get('/download/:filename', (req, res) => {
     const filename = req.params.filename;
-    const filePath = path.resolve(process.env.DATA_DIR!, filename);
+    const filePath = path.resolve(process.env.DATA!, filename);
 
     // Verify file exists and is a zip file
     if (!fs.existsSync(filePath) || !filename.endsWith('.zip')) {

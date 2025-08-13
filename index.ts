@@ -144,7 +144,7 @@ export function saveFilesByLanguage() {
                 allLinks.push(file);
             } else {
                 const relativePath = path.relative("./", file);
-                const languageDir = path.join(process.env.DATA_DIR!, "languages", language);
+                const languageDir = path.join(process.env.DATA!, "languages", language);
                 const targetDir = path.join(languageDir, path.dirname(relativePath));
                 const targetPath = path.join(languageDir, relativePath);
 
@@ -155,7 +155,7 @@ export function saveFilesByLanguage() {
             }
         }
         if (allLinks.length > 0) {
-            const languageDir = path.join(process.env.DATA_DIR!, "languages", language);
+            const languageDir = path.join(process.env.DATA!, "languages", language);
             const linksFilePath = path.join(languageDir, "links.txt");
             if (!fs.existsSync(languageDir)) {
                 fs.mkdirSync(languageDir, { recursive: true });

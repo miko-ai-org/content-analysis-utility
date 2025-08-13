@@ -16,7 +16,7 @@ export async function downloadDriveFileWithOAuth(fileId: string, accessToken: st
     });
 
     const fileName = metadata.data.name ?? `drive-file-${fileId}`;
-    const destPath = path.join(process.env.DATA_DIR!, "temp", fileName);
+    const destPath = path.join(process.env.DATA!, "temp", fileName);
     const dest = fs.createWriteStream(destPath);
 
     // Download file content
