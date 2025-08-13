@@ -76,29 +76,18 @@ app.get('/', (req, res) => {
 
 let isProcessing = false;
 
+app.get('/status', (req, res) => {
+    res.json({
+        isProcessing
+    });
+});
+
 app.post('/upload', upload.single('file'), async (req, res) => {
-
-    let authToken = req.headers.authorization;
-    if (!authToken) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    authToken = authToken.split(' ')[1];
-
-    let googleAccessToken = "";
-
     try {
-        let decoded = jwt.verify(authToken, JWT_SECRET!);
-        googleAccessToken = (decoded as any).access_token;
-    } catch (error) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // Ensure temp directory exists
-    if (!fs.existsSync(process.env.DATA + "temp")) {
-        fs.mkdirSync(process.env.DATA + "temp");
-    }
-
-    try {
+        // Ensure temp directory exists
+        if (!fs.existsSync(process.env.DATA + "temp")) {
+            fs.mkdirSync(process.env.DATA + "temp");
+        }
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
         }
@@ -108,6 +97,21 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         }
 
         isProcessing = true;
+
+        let authToken = req.headers.authorization;
+        if (!authToken) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        authToken = authToken.split(' ')[1];
+
+        let googleAccessToken = "";
+
+        try {
+            let decoded = jwt.verify(authToken, JWT_SECRET!);
+            googleAccessToken = (decoded as any).access_token;
+        } catch (error) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
 
         // delete zip file starting with languages_
         const languagesZipFiles = fs.readdirSync(process.env.DATA!).filter(file => file.startsWith("languages_"));

@@ -442,6 +442,7 @@
         const AUTH_TOKEN_KEY = 'authToken-for-content-utility';
         let authToken = null;
         let socket = null;
+        let serverBusy = false;
 
         // Initialize app
         function initializeApp() {
@@ -456,6 +457,9 @@
             if (authToken) {
                 showMainApp();
                 initializeSocket();
+                checkServerStatus(); // Check initial status
+                // Check status periodically while app is active
+                setInterval(checkServerStatus, 5000); // Check every 5 seconds
             } else {
                 showAuthScreen();
             }
@@ -469,10 +473,6 @@
         function showMainApp() {
             document.getElementById('authContainer').classList.remove('active');
             document.getElementById('mainContainer').classList.add('active');
-
-            // Show user email if available (you can decode from JWT token or fetch from API)
-            const userEmailElement = document.getElementById('userEmail');
-            userEmailElement.textContent = 'User'; // You can implement proper user info extraction
         }
 
         function signInWithGoogle() {
@@ -545,7 +545,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             // Drag and drop handlers
             if (dropZone && fileInput) {
-                dropZone.addEventListener('click', () => fileInput.click());
+                dropZone.addEventListener('click', handleDropZoneClick);
                 dropZone.addEventListener('dragover', handleDragOver);
                 dropZone.addEventListener('dragleave', handleDragLeave);
                 dropZone.addEventListener('drop', handleDrop);
@@ -556,8 +556,20 @@
             initializeApp();
         });
 
+        function handleDropZoneClick() {
+            if (serverBusy) {
+                showError('Server is currently processing another file. Please wait and try again.');
+                return;
+            }
+            fileInput.click();
+        }
+
         function handleDragOver(e) {
             e.preventDefault();
+            if (serverBusy) {
+                e.dataTransfer.dropEffect = 'none';
+                return;
+            }
             dropZone.classList.add('dragover');
         }
 
@@ -569,6 +581,12 @@
         function handleDrop(e) {
             e.preventDefault();
             dropZone.classList.remove('dragover');
+
+            if (serverBusy) {
+                showError('Server is currently processing another file. Please wait and try again.');
+                return;
+            }
+
             const files = e.dataTransfer.files;
             if (files.length > 0) {
                 processFile(files[0]);
@@ -576,6 +594,11 @@
         }
 
         function handleFileSelect(e) {
+            if (serverBusy) {
+                showError('Server is currently processing another file. Please wait and try again.');
+                return;
+            }
+
             const files = e.target.files;
             if (files.length > 0) {
                 processFile(files[0]);
@@ -585,6 +608,11 @@
         function processFile(file) {
             if (!authToken) {
                 showError('Please sign in to analyze files');
+                return;
+            }
+
+            if (serverBusy) {
+                showError('Server is currently processing another file. Please wait and try again.');
                 return;
             }
 
@@ -651,10 +679,12 @@
 
         function showProgress() {
             progressContainer.style.display = 'block';
+            updateDropZoneState(); // Update drop zone visibility
         }
 
         function hideProgress() {
             progressContainer.style.display = 'none';
+            updateDropZoneState(); // Update drop zone visibility
         }
 
         function updateProgressBar(percentage) {
@@ -741,6 +771,7 @@
             dropZone.classList.remove('processing');
             fileInput.value = '';
             updateProgressBar(0);
+            updateDropZoneState(); // Ensure drop zone is visible again
         }
 
         function resetAnalysis() {
@@ -769,6 +800,55 @@
             } else {
                 const days = seconds / 86400;
                 return `${days.toFixed(1)} days`;
+            }
+        }
+
+        // Check server processing status
+        async function checkServerStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                serverBusy = data.isProcessing;
+                updateDropZoneState();
+            } catch (error) {
+                console.warn('Failed to check server status:', error);
+                // On error, assume server is available to avoid blocking users
+                serverBusy = false;
+                updateDropZoneState();
+            }
+        }
+
+        // Update drop zone based on server status
+        function updateDropZoneState() {
+            const dropZone = document.getElementById('dropZone');
+            const dropIcon = dropZone?.querySelector('.drop-icon');
+            const dropText = dropZone?.querySelector('.drop-text');
+            const dropSubtext = dropZone?.querySelector('.drop-subtext');
+
+            if (!dropZone) return;
+
+            // Hide drop zone if currently processing (local upload in progress)
+            if (progressContainer && progressContainer.style.display === 'block') {
+                dropZone.style.display = 'none';
+                return;
+            } else {
+                dropZone.style.display = 'block';
+            }
+
+            if (serverBusy) {
+                dropZone.style.borderColor = '#ffa500';
+                dropZone.style.background = '#fff8e1';
+                dropZone.style.cursor = 'not-allowed';
+                if (dropIcon) dropIcon.textContent = '⏳';
+                if (dropText) dropText.textContent = 'Server is currently processing another file';
+                if (dropSubtext) dropSubtext.textContent = 'Please wait and try again in a moment';
+            } else {
+                dropZone.style.borderColor = '';
+                dropZone.style.background = '';
+                dropZone.style.cursor = 'pointer';
+                if (dropIcon) dropIcon.textContent = '📁';
+                if (dropText) dropText.textContent = 'Drag and drop your file here';
+                if (dropSubtext) dropSubtext.textContent = 'or click to browse (PDF, MP3, MP4, ZIP, XLSX up to 500MB)';
             }
         }
     </script>
