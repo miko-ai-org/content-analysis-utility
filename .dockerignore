@@ -1,0 +1,7 @@
+node_modules
+dist
+.env.beta
+.env.local
+env.beta
+env.local
+.env
