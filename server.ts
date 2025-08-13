@@ -26,6 +26,10 @@ const PORT = process.env.PORT || 3000;
 
 const JWT_SECRET = process.env.JWT_SECRET
 
+if (!process.env.DATA || process.env.DATA == "" || !process.env.DATA.endsWith("/")) {
+    throw new Error("DATA is not set or is not a valid directory or does not end with a /");
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
