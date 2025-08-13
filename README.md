@@ -11,7 +11,8 @@ npm install
 Set the following env vars:
 ```
 GOOGLE_API_KEY=
-GOOGLE_CREDENTIALS_JSON=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 ```
 
 The google api key should have youtube API access.

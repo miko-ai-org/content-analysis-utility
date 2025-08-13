@@ -310,13 +310,13 @@ async function getAllCellContentFromXlsxFile(filePath: string) {
     return allSheetsData;
 }
 
-export async function downloadFileFromGdrive(url: string): Promise<string> {
+export async function downloadFileFromGdrive(url: string, accessToken: string): Promise<string> {
     const fileId = extractDriveFileId(url);
     if (!fileId) {
         throw new Error('Could not extract file ID from URL');
     }
 
-    const filePath = await downloadDriveFileWithOAuth(fileId);
+    const filePath = await downloadDriveFileWithOAuth(fileId, accessToken);
     return filePath;
 }
 

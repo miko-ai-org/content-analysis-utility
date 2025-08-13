@@ -37,14 +37,14 @@ export function formatDuration(seconds: number): string {
     }
 }
 
-export async function processFile(dirPath: string, item: string, updateProgressCallback: (fileName: string) => void) {
+export async function processFile(dirPath: string, item: string, accessToken: string, updateProgressCallback: (fileName: string) => void) {
     updateProgressCallback(item);
     const itemPath = path.join(dirPath, item);
     const stats = fs.statSync(itemPath);
 
     if (stats.isDirectory()) {
         // Recursively process subdirectory
-        await processDirectory(itemPath, updateProgressCallback);
+        await processDirectory(itemPath, accessToken, updateProgressCallback);
     } else if (stats.isFile()) {
         // Process file
         const fileType = item.split('.').pop();
@@ -60,17 +60,17 @@ export async function processFile(dirPath: string, item: string, updateProgressC
             const links = await getAllLinksFromPdfFile(itemPath);
             let promises = [];
             for (const link of links) {
-                promises.push(processLink(link, updateProgressCallback));
+                promises.push(processLink(link, accessToken, updateProgressCallback));
             }
             await Promise.all(promises);
         } else if (fileType === 'zip') {
             let dir = await unzip(dirPath, itemPath);
-            await processDirectory(dir, updateProgressCallback);
+            await processDirectory(dir, accessToken, updateProgressCallback);
         } else if (fileType === "xlsx") {
             let links = await getAllLinksFromXlsxFile(itemPath);
             let promises = [];
             for (const link of links) {
-                promises.push(processLink(link, updateProgressCallback));
+                promises.push(processLink(link, accessToken, updateProgressCallback));
             }
             await Promise.all(promises);
         } else if (fileType === "mp4") {
@@ -78,21 +78,20 @@ export async function processFile(dirPath: string, item: string, updateProgressC
             updateLanguageStats('en', duration, 0, 0, 1, itemPath);
         } else {
             updateLanguageStats('other', 0, 0, 0, 0, itemPath);
-            console.warn(`Unknown file type: ${fileType}`);
         }
     }
 }
 
-export async function processDirectory(dirPath: string, updateProgressCallback: (fileName: string) => void) {
+export async function processDirectory(dirPath: string, accessToken: string, updateProgressCallback: (fileName: string) => void) {
     const items = fs.readdirSync(dirPath);
     let promises = [];
     for (const item of items) {
-        promises.push(processFile(dirPath, item, updateProgressCallback));
+        promises.push(processFile(dirPath, item, accessToken, updateProgressCallback));
     }
     await Promise.all(promises);
 }
 
-export async function processLink(link: string, updateProgressCallback: (fileName: string) => void) {
+export async function processLink(link: string, accessToken: string, updateProgressCallback: (fileName: string) => void) {
     if (seenLinks.has(link)) {
         return;
     }
@@ -105,8 +104,8 @@ export async function processLink(link: string, updateProgressCallback: (fileNam
         updateLanguageStats(language, duration, 0, 0, 1, link);
     } else if (link.includes("drive.google.com")) {
         try {
-            let filePath = await downloadFileFromGdrive(link);
-            await processFile(path.dirname(filePath), path.basename(filePath), updateProgressCallback);
+            let filePath = await downloadFileFromGdrive(link, accessToken);
+            await processFile(path.dirname(filePath), path.basename(filePath), accessToken, updateProgressCallback);
         } catch (error) {
             console.error(`Failed to download file from Drive: ${link}. Error: ${(error as any).message}`);
         }
@@ -119,7 +118,6 @@ export async function processLink(link: string, updateProgressCallback: (fileNam
         //     }
     } else {
         updateLanguageStats('other', 0, 0, 0, 0, link);
-        console.warn(`Unknown link type: ${link}`);
     }
 }
 

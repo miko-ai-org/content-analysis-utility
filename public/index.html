@@ -34,6 +34,96 @@
             text-align: center;
         }
 
+        /* Auth Screen Styles */
+        .auth-container {
+            display: none;
+        }
+
+        .auth-container.active {
+            display: block;
+        }
+
+        .auth-title {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .auth-subtitle {
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+
+        .google-signin-btn {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.3s ease;
+            text-decoration: none;
+        }
+
+        .google-signin-btn:hover {
+            background: #357ae8;
+        }
+
+        .google-icon {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #4285f4;
+        }
+
+        /* Main App Styles */
+        .main-container {
+            display: none;
+        }
+
+        .main-container.active {
+            display: block;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: #c0392b;
+        }
+
         h1 {
             color: #333;
             margin-bottom: 10px;
@@ -256,6 +346,11 @@
                 padding: 20px;
             }
 
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+
             h1 {
                 font-size: 2rem;
             }
@@ -269,37 +364,138 @@
 
 <body>
     <div class="container">
-        <h1>📊 Content Analysis Utility</h1>
-        <p class="subtitle">Analyze your content files and get detailed insights by language and media type</p>
+        <!-- Authentication Screen -->
+        <div class="auth-container" id="authContainer">
+            <h1 class="auth-title">📊 Content Analysis Utility</h1>
+            <p class="auth-subtitle">Please sign in to analyze your content files and get detailed insights</p>
 
-        <div class="drop-zone" id="dropZone">
-            <div class="drop-icon">📁</div>
-            <div class="drop-text">Drag and drop your file here</div>
-            <div class="drop-subtext">or click to browse (PDF, MP3, MP4, ZIP, XLSX up to 500MB)</div>
-            <input type="file" class="file-input" id="fileInput" accept=".pdf,.mp3,.mp4,.zip,.xlsx">
+            <button class="google-signin-btn" onclick="signInWithGoogle()">
+                <div class="google-icon">G</div>
+                Sign in with Google
+            </button>
         </div>
 
-        <div class="progress-container" id="progressContainer">
-            <div class="progress-text" id="progressText">Preparing to process...</div>
-            <div class="progress-text" id="currentFile"></div>
-        </div>
-
-        <div id="errorContainer"></div>
-
-        <div class="results-container" id="resultsContainer">
-            <div class="results-header">
-                📈 Analysis Results
+        <!-- Main Application -->
+        <div class="main-container" id="mainContainer">
+            <div class="header">
+                <div>
+                    <h1>📊 Content Analysis Utility</h1>
+                    <p class="subtitle">Analyze your content files and get detailed insights by language and media type
+                    </p>
+                </div>
+                <div class="user-info">
+                    <span id="userEmail"></span>
+                    <button class="logout-btn" onclick="logout()">Logout</button>
+                </div>
             </div>
-            <div class="results-content">
-                <div class="summary-stats" id="summaryStats"></div>
-                <div id="languageBreakdown"></div>
+
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-icon">📁</div>
+                <div class="drop-text">Drag and drop your file here</div>
+                <div class="drop-subtext">or click to browse (PDF, MP3, MP4, ZIP, XLSX up to 500MB)</div>
+                <input type="file" class="file-input" id="fileInput" accept=".pdf,.mp3,.mp4,.zip,.xlsx">
             </div>
-            <button class="reset-btn" onclick="resetAnalysis()">Analyze Another File</button>
+
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-text" id="progressText">Preparing to process...</div>
+                <div class="progress-text" id="currentFile"></div>
+            </div>
+
+            <div id="errorContainer"></div>
+
+            <div class="results-container" id="resultsContainer">
+                <div class="results-header">
+                    📈 Analysis Results
+                </div>
+                <div class="results-content">
+                    <div class="summary-stats" id="summaryStats"></div>
+                    <div id="languageBreakdown"></div>
+                </div>
+                <button class="reset-btn" onclick="resetAnalysis()">Analyze Another File</button>
+            </div>
         </div>
     </div>
 
     <script>
-        const socket = io();
+        // Authentication and app state management
+        const AUTH_TOKEN_KEY = 'authToken-for-content-utility';
+        let authToken = null;
+        let socket = null;
+
+        // Initialize app
+        function initializeApp() {
+            if (window.location.search.includes('token=')) {
+                const token = window.location.search.split('token=')[1];
+                localStorage.setItem(AUTH_TOKEN_KEY, token);
+                authToken = token;
+            } else {
+                authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+            }
+
+            if (authToken) {
+                showMainApp();
+                initializeSocket();
+            } else {
+                showAuthScreen();
+            }
+        }
+
+        function showAuthScreen() {
+            document.getElementById('authContainer').classList.add('active');
+            document.getElementById('mainContainer').classList.remove('active');
+        }
+
+        function showMainApp() {
+            document.getElementById('authContainer').classList.remove('active');
+            document.getElementById('mainContainer').classList.add('active');
+
+            // Show user email if available (you can decode from JWT token or fetch from API)
+            const userEmailElement = document.getElementById('userEmail');
+            userEmailElement.textContent = 'User'; // You can implement proper user info extraction
+        }
+
+        function signInWithGoogle() {
+            window.location.href = '/auth/google';
+        }
+
+        function logout() {
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+            authToken = null;
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+            showAuthScreen();
+            resetAnalysis();
+        }
+
+        function initializeSocket() {
+            socket = io();
+            setupSocketHandlers();
+        }
+
+        function setupSocketHandlers() {
+            // Socket event handlers
+            socket.on('processing-start', (data) => {
+                progressText.textContent = `Processing ${data.filename}...`;
+                currentFile.textContent = `File size: ${formatFileSize(data.size)}`;
+            });
+
+            socket.on('processing-progress', (progress) => {
+                progressText.textContent = progress.message;
+                if (progress.currentFile) {
+                    currentFile.textContent = `Current: ${progress.currentFile}`;
+                }
+            });
+
+            socket.on('processing-complete', (results) => {
+                hideProgress();
+                showResults(results);
+                resetDropZone();
+            });
+        }
+
+        // File handling
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const progressContainer = document.getElementById('progressContainer');
@@ -309,12 +505,20 @@
         const resultsContainer = document.getElementById('resultsContainer');
         const errorContainer = document.getElementById('errorContainer');
 
-        // Drag and drop handlers
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', handleDragOver);
-        dropZone.addEventListener('dragleave', handleDragLeave);
-        dropZone.addEventListener('drop', handleDrop);
-        fileInput.addEventListener('change', handleFileSelect);
+        // Setup event listeners after DOM is loaded
+        document.addEventListener('DOMContentLoaded', function () {
+            // Drag and drop handlers
+            if (dropZone && fileInput) {
+                dropZone.addEventListener('click', () => fileInput.click());
+                dropZone.addEventListener('dragover', handleDragOver);
+                dropZone.addEventListener('dragleave', handleDragLeave);
+                dropZone.addEventListener('drop', handleDrop);
+                fileInput.addEventListener('change', handleFileSelect);
+            }
+
+            // Initialize the app
+            initializeApp();
+        });
 
         function handleDragOver(e) {
             e.preventDefault();
@@ -343,6 +547,11 @@
         }
 
         function processFile(file) {
+            if (!authToken) {
+                showError('Please sign in to analyze files');
+                return;
+            }
+
             clearError();
             hideResults();
             showProgress();
@@ -354,9 +563,18 @@
 
             fetch('/upload', {
                 method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                },
                 body: formData
             })
-                .then(response => response.json())
+                .then(response => {
+                    if (response.status === 401) {
+                        logout();
+                        throw new Error('Session expired. Please sign in again.');
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (!data.success) {
                         throw new Error(data.error || 'Upload failed');
@@ -368,25 +586,6 @@
                     resetDropZone();
                 });
         }
-
-        // Socket event handlers
-        socket.on('processing-start', (data) => {
-            progressText.textContent = `Processing ${data.filename}...`;
-            currentFile.textContent = `File size: ${formatFileSize(data.size)}`;
-        });
-
-        socket.on('processing-progress', (progress) => {
-            progressText.textContent = progress.message;
-            if (progress.currentFile) {
-                currentFile.textContent = `Current: ${progress.currentFile}`;
-            }
-        });
-
-        socket.on('processing-complete', (results) => {
-            hideProgress();
-            showResults(results);
-            resetDropZone();
-        });
 
         function showProgress() {
             progressContainer.style.display = 'block';

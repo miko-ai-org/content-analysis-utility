@@ -42,14 +42,14 @@ export class ContentAnalyzer {
         }
     }
 
-    async processFile(dirPath: string, item: string): Promise<ProcessingResults> {
+    async processFile(dirPath: string, item: string, accessToken: string): Promise<ProcessingResults> {
         // Reset state using index.ts function
         resetStats();
 
         this.updateProgress('file', 'Processing files...', item);
 
         // Use the processFile function from index.ts
-        await processFile(dirPath, item, (fileName) => this.updateProgress('file', 'Processing files...', fileName));
+        await processFile(dirPath, item, accessToken, (fileName) => this.updateProgress('file', 'Processing files...', fileName));
 
         // Get results using index.ts function
         const languageStats = getLanguageStats();

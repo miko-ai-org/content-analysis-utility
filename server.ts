@@ -9,7 +9,9 @@ import path from 'path';
 import fs from 'fs';
 import { zipLanguagesFolder } from './utils';
 import { ContentAnalyzer } from './contentAnalyzer';
-import { authorizeDesktop } from './driveDownloader';
+import crypto from 'crypto';
+import axios from 'axios';
+import jwt from 'jsonwebtoken';
 
 const app = express();
 const server = http.createServer(app);
@@ -21,6 +23,8 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+
+const JWT_SECRET = process.env.JWT_SECRET
 
 // Middleware
 app.use(cors());
@@ -78,10 +82,27 @@ app.get('/', (req, res) => {
 let isProcessing = false;
 
 app.post('/upload', upload.single('file'), async (req, res) => {
+
+    let authToken = req.headers.authorization;
+    if (!authToken) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    authToken = authToken.split(' ')[1];
+
+    let decoded = jwt.verify(authToken, JWT_SECRET!);
+    let googleAccessToken = (decoded as any).access_token;
+
     // Ensure temp directory exists
     if (!fs.existsSync("./temp")) {
         fs.mkdirSync("./temp");
     }
+
+    // delete zip file starting with languages_
+    const languagesZipFiles = fs.readdirSync("./").filter(file => file.startsWith("languages_"));
+    for (const file of languagesZipFiles) {
+        fs.unlinkSync(path.join("./", file));
+    }
+
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
@@ -92,10 +113,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         }
 
         isProcessing = true;
-
-        // we call this here so that we can authorize the with google before handling the files so that
-        // we don't end up opening many browser windows in case we need the user to login.
-        await authorizeDesktop();
 
         const socketId = req.body.socketId;
         const clientSocket = io.sockets.sockets.get(socketId);
@@ -116,7 +133,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         });
 
         // Process the uploaded file
-        const results = await analyzer.processFile('./uploads', req.file.filename);
+        const results = await analyzer.processFile('./uploads', req.file.filename, googleAccessToken);
 
         // Create zip file from languages folder
         const zipFilePath = await zipLanguagesFolder();
@@ -225,6 +242,68 @@ app.get('/download/:filename', (req, res) => {
         }
     });
 });
+
+app.get('/auth/google', (req, res) => {
+    const redirectUri = 'https://accounts.google.com/o/oauth2/v2/auth?' +
+        new URLSearchParams({
+            client_id: process.env.GOOGLE_CLIENT_ID!,
+            redirect_uri: process.env.API_URL + "/auth/google/callback",
+            response_type: 'code',
+            scope: 'email profile https://www.googleapis.com/auth/drive.readonly',
+            hd: "miko.ai",
+            state: crypto.randomBytes(16).toString('hex') // Add state parameter for security
+        }).toString();
+
+    res.redirect(redirectUri);
+});
+
+app.get('/auth/google/callback', (async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const code = req.query.code;
+    const error = req.query.error;
+
+    if (error) {
+        return res.redirect(`${process.env.API_URL}/`);
+    }
+
+    try {
+        // Exchange code for tokens
+        const { data } = await axios.post('https://oauth2.googleapis.com/token', {
+            code,
+            client_id: process.env.GOOGLE_CLIENT_ID!,
+            redirect_uri: process.env.API_URL + "/auth/google/callback",
+            grant_type: 'authorization_code',
+            client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        }, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+        });
+
+        const { access_token } = data;
+
+        // Get user info
+        const userInfo = await axios.get(`https://www.googleapis.com/oauth2/v3/userinfo`, {
+            headers: { Authorization: `Bearer ${access_token}` },
+        });
+
+        let googleUserId = userInfo.data.sub;
+
+        // Create JWT token
+        const token = jwt.sign(
+            {
+                sub: googleUserId,
+                access_token
+            },
+            JWT_SECRET!,
+            { expiresIn: '30m' }
+        );
+
+        // Redirect with the token
+        res.redirect(`${process.env.API_URL}/?token=${token}`);
+    } catch (err) {
+        next(err);
+    }
+}) as express.RequestHandler);
 
 // Error handling middleware
 app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
