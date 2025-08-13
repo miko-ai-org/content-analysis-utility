@@ -13,6 +13,8 @@ Set the following env vars:
 GOOGLE_API_KEY=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+API_URL=http://localhost:3000
+JWT_SECRET=
 ```
 
 The google api key should have youtube API access.
