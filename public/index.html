@@ -191,10 +191,20 @@
             margin: 20px 0;
         }
 
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+
         .progress-fill {
-            background: linear-gradient(90deg, #667eea, #764ba2);
             height: 100%;
             width: 0%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 5px;
             transition: width 0.3s ease;
         }
 
@@ -202,6 +212,13 @@
             color: #666;
             font-size: 0.9rem;
             margin: 5px 0;
+        }
+
+        .progress-percentage {
+            font-size: 0.9rem;
+            color: #666;
+            margin: 5px 0;
+            font-weight: 600;
         }
 
         .results-container {
@@ -398,6 +415,10 @@
 
             <div class="progress-container" id="progressContainer">
                 <div class="progress-text" id="progressText">Preparing to process...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-percentage" id="progressPercentage">0%</div>
                 <div class="progress-text" id="currentFile"></div>
             </div>
 
@@ -477,11 +498,15 @@
         function setupSocketHandlers() {
             // Socket event handlers
             socket.on('processing-start', (data) => {
+                updateProgressBar(55);
                 progressText.textContent = `Processing ${data.filename}...`;
                 currentFile.textContent = `File size: ${formatFileSize(data.size)}`;
             });
 
             socket.on('processing-progress', (progress) => {
+                // Processing progress goes from 55% to 95%
+                const processingProgress = 55 + Math.round((progress.percentage || 0) * 0.4);
+                updateProgressBar(processingProgress);
                 progressText.textContent = progress.message;
                 if (progress.currentFile) {
                     currentFile.textContent = `Current: ${progress.currentFile}`;
@@ -489,8 +514,18 @@
             });
 
             socket.on('processing-complete', (results) => {
+                updateProgressBar(100);
+                progressText.textContent = 'Analysis complete!';
+                setTimeout(() => {
+                    hideProgress();
+                    showResults(results);
+                    resetDropZone();
+                }, 1000);
+            });
+
+            socket.on('processing-error', (error) => {
                 hideProgress();
-                showResults(results);
+                showError(error.message || 'An error occurred during processing');
                 resetDropZone();
             });
         }
@@ -501,6 +536,7 @@
         const progressContainer = document.getElementById('progressContainer');
         const progressFill = document.getElementById('progressFill');
         const progressText = document.getElementById('progressText');
+        const progressPercentage = document.getElementById('progressPercentage');
         const currentFile = document.getElementById('currentFile');
         const resultsContainer = document.getElementById('resultsContainer');
         const errorContainer = document.getElementById('errorContainer');
@@ -557,34 +593,60 @@
             showProgress();
             dropZone.classList.add('processing');
 
+            // Reset progress
+            updateProgressBar(0);
+            progressText.textContent = 'Preparing upload...';
+            currentFile.textContent = `File: ${file.name} (${formatFileSize(file.size)})`;
+
             const formData = new FormData();
             formData.append('file', file);
             formData.append('socketId', socket.id);
 
-            fetch('/upload', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${authToken}`
-                },
-                body: formData
-            })
-                .then(response => {
-                    if (response.status === 401) {
-                        logout();
-                        throw new Error('Session expired. Please sign in again.');
+            // Use XMLHttpRequest for upload progress tracking
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const uploadProgress = Math.round((e.loaded / e.total) * 50); // Upload takes 50% of progress
+                    updateProgressBar(uploadProgress);
+                    progressText.textContent = `Uploading... ${formatFileSize(e.loaded)} / ${formatFileSize(e.total)}`;
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 401) {
+                    logout();
+                    showError('Session expired. Please sign in again.');
+                    hideProgress();
+                    resetDropZone();
+                    return;
+                }
+
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (!response.success) {
+                        throw new Error(response.error || 'Upload failed');
                     }
-                    return response.json();
-                })
-                .then(data => {
-                    if (!data.success) {
-                        throw new Error(data.error || 'Upload failed');
-                    }
-                })
-                .catch(error => {
+
+                    // Upload complete, now processing starts
+                    updateProgressBar(50);
+                    progressText.textContent = 'Upload complete. Starting analysis...';
+                } catch (error) {
                     hideProgress();
                     showError(error.message);
                     resetDropZone();
-                });
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                hideProgress();
+                showError('Upload failed. Please try again.');
+                resetDropZone();
+            });
+
+            xhr.open('POST', '/upload');
+            xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+            xhr.send(formData);
         }
 
         function showProgress() {
@@ -593,6 +655,11 @@
 
         function hideProgress() {
             progressContainer.style.display = 'none';
+        }
+
+        function updateProgressBar(percentage) {
+            progressFill.style.width = `${percentage}%`;
+            progressPercentage.textContent = `${percentage}%`;
         }
 
         function showResults(results) {
@@ -673,6 +740,7 @@
         function resetDropZone() {
             dropZone.classList.remove('processing');
             fileInput.value = '';
+            updateProgressBar(0);
         }
 
         function resetAnalysis() {

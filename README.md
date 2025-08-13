@@ -15,6 +15,7 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 API_URL=http://localhost:3000
 JWT_SECRET=
+DATA_DIR=./
 ```
 
 The google api key should have youtube API access.

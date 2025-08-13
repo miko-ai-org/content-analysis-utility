@@ -451,14 +451,13 @@ function extractDriveFileId(link: string): string | null {
 export async function zipLanguagesFolder(): Promise<string> {
     return new Promise((resolve, reject) => {
         const timestamp = Date.now();
-        const zipFilePath = `./languages_${timestamp}.zip`;
+        const zipFilePath = process.env.DATA_DIR! + `languages_${timestamp}.zip`;
         const output = fs.createWriteStream(zipFilePath);
         const archive = archiver('zip', {
             zlib: { level: 9 } // Sets the compression level
         });
 
         output.on('close', () => {
-            console.log(`Created zip file: ${zipFilePath} (${archive.pointer()} total bytes)`);
             resolve(zipFilePath);
         });
 
@@ -473,8 +472,8 @@ export async function zipLanguagesFolder(): Promise<string> {
         archive.pipe(output);
 
         // Check if languages folder exists
-        if (fs.existsSync('./languages')) {
-            archive.directory('./languages/', false);
+        if (fs.existsSync(process.env.DATA_DIR! + 'languages')) {
+            archive.directory(process.env.DATA_DIR! + 'languages/', false);
         } else {
             // Create empty zip if no languages folder exists
             archive.append('No content found', { name: 'empty.txt' });

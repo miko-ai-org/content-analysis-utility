@@ -19,10 +19,9 @@ export interface ProcessingResults {
 }
 
 export interface ProgressUpdate {
-    type: 'file' | 'link' | 'complete';
     message: string;
     currentFile?: string;
-    progress?: number;
+    percentage?: number;
 }
 
 export class ContentAnalyzer {
@@ -32,12 +31,12 @@ export class ContentAnalyzer {
         this.progressCallback = progressCallback;
     }
 
-    private updateProgress(type: ProgressUpdate['type'], message: string, currentFile?: string) {
+    private updateProgress(message: string, currentFile?: string, percentage?: number) {
         if (this.progressCallback) {
             this.progressCallback({
-                type,
                 message,
                 currentFile,
+                percentage
             });
         }
     }
@@ -46,10 +45,14 @@ export class ContentAnalyzer {
         // Reset state using index.ts function
         resetStats();
 
-        this.updateProgress('file', 'Processing files...', item);
+        this.updateProgress('Starting analysis...', item, 10);
 
         // Use the processFile function from index.ts
-        await processFile(dirPath, item, accessToken, (fileName) => this.updateProgress('file', 'Processing files...', fileName));
+        await processFile(dirPath, item, accessToken, (fileName) =>
+            this.updateProgress('Processing files...', fileName, 30)
+        );
+
+        this.updateProgress('Calculating statistics...', undefined, 60);
 
         // Get results using index.ts function
         const languageStats = getLanguageStats();
@@ -57,12 +60,16 @@ export class ContentAnalyzer {
         // Calculate totals
         const totals = this.calculateTotals(languageStats);
 
+        this.updateProgress('Formatting results...', undefined, 80);
+
         // Format results
         const formattedResults = this.formatResults(languageStats);
 
+        this.updateProgress('Organizing files by language...', undefined, 90);
+
         saveFilesByLanguage();
 
-        this.updateProgress('complete', 'Processing complete!');
+        this.updateProgress('Processing complete!', undefined, 100);
 
         return {
             languageStats,

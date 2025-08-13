@@ -34,7 +34,7 @@ app.use(express.static('public'));
 // Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = './uploads';
+        const uploadDir = process.env.DATA_DIR + 'uploads';
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
         }
@@ -65,15 +65,6 @@ const upload = multer({
     }
 });
 
-// Socket.io connection handling
-io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
-
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
-    });
-});
-
 // Routes
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -89,12 +80,18 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     }
     authToken = authToken.split(' ')[1];
 
-    let decoded = jwt.verify(authToken, JWT_SECRET!);
-    let googleAccessToken = (decoded as any).access_token;
+    let googleAccessToken = "";
+
+    try {
+        let decoded = jwt.verify(authToken, JWT_SECRET!);
+        googleAccessToken = (decoded as any).access_token;
+    } catch (error) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
 
     // Ensure temp directory exists
-    if (!fs.existsSync("./temp")) {
-        fs.mkdirSync("./temp");
+    if (!fs.existsSync(process.env.DATA_DIR + "temp")) {
+        fs.mkdirSync(process.env.DATA_DIR + "temp");
     }
 
     try {
@@ -109,9 +106,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         isProcessing = true;
 
         // delete zip file starting with languages_
-        const languagesZipFiles = fs.readdirSync("./").filter(file => file.startsWith("languages_"));
+        const languagesZipFiles = fs.readdirSync(process.env.DATA_DIR!).filter(file => file.startsWith("languages_"));
         for (const file of languagesZipFiles) {
-            fs.unlinkSync(path.join("./", file));
+            fs.unlinkSync(path.join(process.env.DATA_DIR!, file));
         }
 
         const socketId = req.body.socketId;
@@ -133,45 +130,57 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         });
 
         // Process the uploaded file
-        const results = await analyzer.processFile('./uploads', req.file.filename, googleAccessToken);
+        try {
+            const results = await analyzer.processFile(process.env.DATA_DIR + 'uploads', req.file.filename, googleAccessToken);
 
-        // Create zip file from languages folder
-        const zipFilePath = await zipLanguagesFolder();
-        const zipFileName = path.basename(zipFilePath);
-        const zipFileSize = fs.statSync(zipFilePath).size;
+            // Create zip file from languages folder
+            const zipFilePath = await zipLanguagesFolder();
+            const zipFileName = path.basename(zipFilePath);
+            const zipFileSize = fs.statSync(zipFilePath).size;
 
-        // Send results with zip file info
-        clientSocket.emit('processing-complete', {
-            ...results,
-            zipFile: {
-                filename: zipFileName,
-                size: zipFileSize,
-                downloadUrl: `/download/${zipFileName}`
-            }
-        });
+            // Send results with zip file info
+            clientSocket.emit('processing-complete', {
+                ...results,
+                zipFile: {
+                    filename: zipFileName,
+                    size: zipFileSize,
+                    downloadUrl: `/download/${zipFileName}`
+                }
+            });
 
-        res.json({
-            success: true,
-            message: 'File processed successfully',
-            zipFile: {
-                filename: zipFileName,
-                size: zipFileSize,
-                downloadUrl: `/download/${zipFileName}`
-            }
-        });
+            res.json({
+                success: true,
+                message: 'File processed successfully',
+                zipFile: {
+                    filename: zipFileName,
+                    size: zipFileSize,
+                    downloadUrl: `/download/${zipFileName}`
+                }
+            });
+        } catch (processingError) {
+            console.error('Processing error:', processingError);
+            // Emit error to client
+            clientSocket.emit('processing-error', {
+                message: processingError instanceof Error ? processingError.message : 'Processing failed'
+            });
+
+            // Also send error response
+            res.status(500).json({
+                error: processingError instanceof Error ? processingError.message : 'An error occurred during processing'
+            });
+        }
 
     } catch (error) {
-        console.error('Upload error:', error);
+        console.error('Pre processing error:', error);
 
         res.status(500).json({
-            error: error instanceof Error ? error.message : 'An error occurred during processing'
+            error: error instanceof Error ? error.message : 'An error occurred during pre processing'
         });
     } finally {
         // Cleanup uploaded file
         if (req.file && fs.existsSync(req.file.path)) {
             try {
                 fs.unlinkSync(req.file.path);
-                console.log(`Cleaned up uploaded file: ${req.file.path}`);
             } catch (error) {
                 console.error(`Failed to delete uploaded file ${req.file.path}:`, error);
             }
@@ -180,22 +189,19 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         // Clean up any remaining temporary directories
         try {
             // Remove temp directory if it exists
-            if (fs.existsSync("./temp")) {
-                fs.rmSync("./temp", { recursive: true, force: true });
-                console.log('Cleaned up ./temp directory');
+            if (fs.existsSync(process.env.DATA_DIR + "temp")) {
+                fs.rmSync(process.env.DATA_DIR + "temp", { recursive: true, force: true });
             }
 
             // Remove languages directory if it exists
-            if (fs.existsSync("./languages")) {
-                fs.rmSync("./languages", { recursive: true, force: true });
-                console.log('Cleaned up ./languages directory');
+            if (fs.existsSync(process.env.DATA_DIR + "languages")) {
+                fs.rmSync(process.env.DATA_DIR + "languages", { recursive: true, force: true });
             }
 
             // Clean up uploads directory if it's empty (optional)
-            const uploadsDir = './uploads';
+            const uploadsDir = process.env.DATA_DIR + 'uploads';
             if (fs.existsSync(uploadsDir)) {
                 fs.rmSync(uploadsDir, { recursive: true, force: true });
-                console.log('Cleaned up uploads directory');
             }
         } catch (error) {
             console.error('Error during cleanup:', error);
@@ -208,7 +214,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 // Download endpoint for zip files
 app.get('/download/:filename', (req, res) => {
     const filename = req.params.filename;
-    const filePath = path.join(__dirname, filename);
+    const filePath = path.resolve(process.env.DATA_DIR!, filename);
 
     // Verify file exists and is a zip file
     if (!fs.existsSync(filePath) || !filename.endsWith('.zip')) {
@@ -227,13 +233,11 @@ app.get('/download/:filename', (req, res) => {
                 res.status(500).json({ error: 'Error downloading file' });
             }
         } else {
-            console.log(`File ${filename} downloaded successfully`);
             // Clean up the zip file after successful download
             setTimeout(() => {
                 try {
                     if (fs.existsSync(filePath)) {
                         fs.unlinkSync(filePath);
-                        console.log(`Cleaned up zip file: ${filePath}`);
                     }
                 } catch (error) {
                     console.error(`Failed to delete zip file ${filePath}:`, error);
